@@ -9,11 +9,15 @@ import math
 import GPy
 import GPyOpt
 
+model_path = '../model/'
+log_path = '../logdir'
+
 MODE = 'opt'
 MODE = 'predict'
 MODE = 'train'
 
 # モデルの保存
+is_save = False
 is_save = True
 
 activation = tf.nn.tanh
@@ -21,19 +25,18 @@ activation = tf.nn.tanh
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
 seq_len = 100
 
-epoch_size = 500000
-input_units = 10
+epoch_size = 5000
+input_units = 2
 inner_units = 20
 output_units = input_units
-
-Kf = 0.5
-Kr = 0.5
-Alpha = 0.5
 
 Kf = 26.654
 Kr = 16.553
 Alpha = 86.721
 
+Kf = 49.471
+Kr = 24.736
+Alpha = 32.889
 
 def weight(shape = []):
     initial = tf.truncated_normal(shape, stddev = 0.01)
@@ -98,8 +101,8 @@ def loss(output):
 
         # リアプノフ指数を取得(評価の際は最大リアプノフ指数をとる)
         # return tf.reduce_sum(loss), lyapunov
-        return tf.reduce_max(loss), lyapunov
-        # return tf.reduce_min(loss), lyapunov
+        # return tf.reduce_max(loss), lyapunov
+        return tf.reduce_min(loss), lyapunov
         # return loss, lyapunov
 
 def train(error):
@@ -112,12 +115,19 @@ def train(error):
 def make_data(length):
     with tf.name_scope('data'):
         r = tf.random_uniform(shape=[input_units*3])*10
+        r = tf.zeros([input_units*3])+1
 
         line = tf.lin_space(0.0, 2*math.pi, num=length)
 
         values = []
-        for i in range(input_units):
-            values.append(r[3*i] * tf.sin(r[3*i+1]*line+r[3*i+2]))
+
+        if input_units == 2:
+            values.append(tf.random_uniform(shape=[length])*10)
+            values.append(tf.sin(line))
+        else:
+            for i in range(input_units):
+                values.append(r[3*i] * tf.sin(r[3*i+1]*line+r[3*i+2]))
+
 
 
         inputs = tf.transpose(tf.reshape(values, shape=[input_units, length]))
@@ -128,17 +138,22 @@ def make_data(length):
     return inputs
 
 def predict():
-    compare = True
-    pseq_len = 5
+    compare = False
+    pseq_len = 100
     psess = tf.InteractiveSession()
 
-    saver = tf.train.import_meta_graph('../model/model.ckpt.meta')
-
-    saver.restore(psess, '../model/model.ckpt')
+    saver = tf.train.import_meta_graph(model_path + 'model.ckpt.meta')
+    saver.restore(psess, tf.train.latest_checkpoint(model_path))
 
     graph = tf.get_default_graph()
-    Wi = graph.get_tensor_by_name("Wi:0")
-    Wo = graph.get_tensor_by_name("Wo:0")
+    '''
+    for op in graph.get_operations():
+        if op.name.find('Wi') > -1:
+            print(op.name)
+    '''
+
+    Wi = graph.get_tensor_by_name("Wi/Wi:0")
+    Wo = graph.get_tensor_by_name("Wo/Wo:0")
 
     print('predict')
     inputs = make_data(pseq_len)
@@ -148,7 +163,11 @@ def predict():
         l.append(get_lyapunov(seq=output[:,i]))
         print('predict-lyapunov:{}'.format(psess.run([l[i]])))
 
-    print('predictor-output:\n{}'.format(psess.run([output])))
+    out = np.array(psess.run([output]))[0,:]
+    print('predictor-output:\n{}'.format(out))
+
+    plt.scatter(out[:,0], out[:,1])
+    plt.show()
 
 
     # In case of No Learning
@@ -178,13 +197,13 @@ def opt(x):
     oseq_len = 5
     osess = tf.InteractiveSession()
 
-    saver = tf.train.import_meta_graph('../model/model.ckpt.meta')
+    saver = tf.train.import_meta_graph(model_path + 'model.ckpt.meta')
 
-    saver.restore(osess, '../model/model.ckpt')
+    saver.restore(osess, model_path + 'model.ckpt')
 
     graph = tf.get_default_graph()
-    Wi = graph.get_tensor_by_name("Wi:0")
-    Wo = graph.get_tensor_by_name("Wo:0")
+    Wi = graph.get_tensor_by_name("Wi/Wi:0")
+    Wo = graph.get_tensor_by_name("Wo/Wo:0")
 
     print('optimize')
     inputs = make_data(oseq_len)
@@ -223,9 +242,9 @@ def main(_):
 
 
         # Tensorboard logfile
-        if tf.gfile.Exists('../logdir'):
-            tf.gfile.DeleteRecursively('../logdir')
-        writer = tf.summary.FileWriter('../logdir', sess.graph)
+        if tf.gfile.Exists(log_path):
+            tf.gfile.DeleteRecursively(log_path)
+        writer = tf.summary.FileWriter(log_path, sess.graph)
 
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
@@ -250,7 +269,16 @@ def main(_):
             # 特定の変数だけ保存するときに使用
             # train_vars = tf.trainable_variables()
             saver = tf.train.Saver()
-            saver.save(sess, "../model/model.ckpt")
+            saver.save(sess, model_path + 'model.ckpt')
+
+            '''
+            saver.restore(sess, tf.train.latest_checkpoint(model_path))
+            print(sess.run(Wi))
+            '''
+        print("output:{}".format(out))
+        out = np.array(out)
+        plt.scatter(out[:,0], out[:,1])
+        plt.show()
 
         sess.close()
 
