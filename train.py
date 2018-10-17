@@ -13,8 +13,8 @@ model_path = '../model/'
 log_path = '../logdir'
 
 MODE = 'opt'
-MODE = 'predict'
 MODE = 'train'
+MODE = 'predict'
 
 # モデルの保存
 is_save = False
@@ -25,7 +25,7 @@ activation = tf.nn.tanh
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
 seq_len = 100
 
-epoch_size = 5000
+epoch_size = 10000
 input_units = 2
 inner_units = 20
 output_units = input_units
@@ -96,7 +96,8 @@ def loss(output):
         for i in range(output_units):
             lyapunov.append(get_lyapunov(output[:,i]))
             loss.append(1/(1+tf.exp(lyapunov[i])))
-            # loss = tf.exp(-lyapunov[i])
+            # loss.append(tf.exp(-lyapunov[i]))
+            # loss.append((-lyapunov[i]))
 
 
         # リアプノフ指数を取得(評価の際は最大リアプノフ指数をとる)
@@ -115,7 +116,7 @@ def train(error):
 def make_data(length):
     with tf.name_scope('data'):
         r = tf.random_uniform(shape=[input_units*3])*10
-        r = tf.zeros([input_units*3])+1
+        # r = tf.zeros([input_units*3])+1
 
         line = tf.lin_space(0.0, 2*math.pi, num=length)
 
@@ -139,7 +140,7 @@ def make_data(length):
 
 def predict():
     compare = False
-    pseq_len = 100
+    pseq_len = 10000
     psess = tf.InteractiveSession()
 
     saver = tf.train.import_meta_graph(model_path + 'model.ckpt.meta')
@@ -166,7 +167,11 @@ def predict():
     out = np.array(psess.run([output]))[0,:]
     print('predictor-output:\n{}'.format(out))
 
-    plt.scatter(out[:,0], out[:,1])
+    plt.scatter(range(pseq_len), out[:,0], c='b', s=1)
+    plt.figure()
+    plt.scatter(range(pseq_len), out[:,1], c='r', s=1)
+    plt.figure()
+    plt.scatter(out[:,0], out[:,1], c='r')
     plt.show()
 
 
