@@ -49,8 +49,8 @@ Their libraries can easily execute Bayesian-Optimization.
 	import GPyOpt
 
 	bounds = [{'name': 'kf',    'type': 'continuous',  'domain': (0.0, 100.0)},
-						{'name': 'kr',    'type': 'continuous',  'domain': (0.0, 100.0)},
-						{'name': 'alpha', 'type': 'continuous',  'domain': (0.0, 100.0)}]
+		{'name': 'kr',    'type': 'continuous',  'domain': (0.0, 100.0)},
+		{'name': 'alpha', 'type': 'continuous',  'domain': (0.0, 100.0)}]
 
 	# Advenced search
 	opt_network = GPyOpt.methods.BayesianOptimization(f=opt, domain=bounds)
@@ -61,7 +61,7 @@ Their libraries can easily execute Bayesian-Optimization.
 	print("optimized loss: {0}".format(opt_network.fx_opt))
 ~~~
 
-Function 'f' is the function which you wanna minimize.
+'f' is the function which you wanna minimize.
 You can optimize the arguments of the function.
 In detail, see my code.
 
