@@ -29,7 +29,7 @@ seq_len = 100
 
 epoch_size = 10000
 input_units = 2
-inner_units = 20
+inner_units = 200
 output_units = input_units
 
 Kf = 26.654
@@ -47,11 +47,6 @@ def weight(shape = []):
 
 def inference(inputs, Wi, Wo):
     with tf.name_scope('Layer1'):
-        # Wi = tf.Variable(weight(shape=[input_units, inner_units]))
-        # Wi = weight(shape=[input_units, inner_units])
-        # Wi = tf.get_variable('Wi', shape=[input_units, inner_units])
-        # tf.summary.histogram('Wi', Wi)
-        
         # input: [None, input_units]
         fi = tf.matmul(inputs, Wi)
         sigm = tf.nn.sigmoid(fi)
@@ -62,11 +57,6 @@ def inference(inputs, Wi, Wo):
         inner_output = outputs[-1]
 
     with tf.name_scope('Layer3'):
-        # Wo = tf.Variable(weight(shape=[inner_units, output_units]))
-        # Wo = weight(shape=[inner_units, output_units])
-        # Wo = tf.get_variable('Wo', shape=[inner_units, output_units])
-        # tf.summary.histogram('Wo', Wo)
-
         fo = tf.matmul(inner_output, Wo)
         # tf.summary.histogram('fo', fo)
 
@@ -104,8 +94,8 @@ def loss(output):
 
         # リアプノフ指数を取得(評価の際は最大リアプノフ指数をとる)
         # return tf.reduce_sum(loss), lyapunov
-        # return tf.reduce_max(loss), lyapunov
-        return tf.reduce_min(loss), lyapunov
+        return tf.reduce_max(loss), lyapunov
+        # return tf.reduce_min(loss), lyapunov
         # return loss, lyapunov
 
 def train(error):
@@ -126,12 +116,11 @@ def make_data(length):
 
         if input_units == 2:
             values.append(tf.random_uniform(shape=[length])*10)
-            values.append(tf.sin(line))
+            values.append(tf.sin(line)+0.1*tf.random_uniform(shape=[length]))
+            # values.append(tf.sin(line)+0.1*tf.random_uniform(shape=[length]))
         else:
             for i in range(input_units):
                 values.append(r[3*i] * tf.sin(r[3*i+1]*line+r[3*i+2]))
-
-
 
         inputs = tf.transpose(tf.reshape(values, shape=[input_units, length]))
 
@@ -286,7 +275,7 @@ def main(_):
             '''
         print("output:{}".format(out))
         out = np.array(out)
-        plt.scatter(out[:,0], out[:,1])
+        plt.scatter(out[:,0], out[:,1], c='r', s=1)
         plt.show()
 
         sess.close()
