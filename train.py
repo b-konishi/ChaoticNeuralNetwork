@@ -10,21 +10,27 @@ import math
 import GPy
 import GPyOpt
 
+from scipy.io.wavfile import read
+
 model_path = '../model/'
 log_path = '../logdir'
 
-MODE = 'predict'
 MODE = 'opt'
+MODE = 'predict'
 MODE = 'train'
 
 # モデルの保存
 is_save = False
 is_save = True
 
+# グラフ描画
+is_plot = True
+is_plot = False
+
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 100
+seq_len = 44100
 
 epoch_size = 1000
 input_units = 2
@@ -130,7 +136,7 @@ def make_data(length):
 
 def predict():
     compare = False
-    pseq_len = 10000
+    pseq_len = 1000
     psess = tf.InteractiveSession()
 
     saver = tf.train.import_meta_graph(model_path + 'model.ckpt.meta')
@@ -147,24 +153,48 @@ def predict():
     Wo = graph.get_tensor_by_name("Wo/Wo:0")
 
     print('predict')
-    inputs = make_data(pseq_len)
+
+    wavfile1 = "./music/jinglebells.wav"
+    wavfile2 = "./music/springsonate.wav"
+    fs1, data1 = read(wavfile1)
+    fs2, data2 = read(wavfile2)
+    if (data1.shape[1] == 2):
+        left1 = data1[20000:20000+pseq_len, 0]
+        right1 = data1[20000:20000+pseq_len, 1]
+    if (data2.shape[1] == 2):
+        left2 = data2[20000:20000+pseq_len, 0]
+        right2 = data2[20000:20000+pseq_len, 1]
+    left1 = left1.reshape((pseq_len,1))
+    left2 = right2.reshape((pseq_len,1))
+    v = np.resize([left1,left2],(pseq_len, input_units))
+
+    plt.figure()
+    plt.plot(range(pseq_len), left1, c='b')
+    plt.figure()
+    plt.plot(range(pseq_len), left2, c='b')
+
+    inputs = tf.placeholder(dtype = tf.float32, shape = [pseq_len, input_units], name='inputs')
+
+    # inputs = make_data(pseq_len)
     output = inference(inputs, Wi, Wo)
     l = []
-    out = psess.run(output)
+    out = psess.run(output, feed_dict={inputs:v})
     for i in range(output_units):
         # print('output[:,i]: {}'.format(out[:,i]))
         l.append(get_lyapunov(seq=out[:,i]))
-        print('predict-lyapunov:{}'.format(psess.run([l[i]])))
+        print('predict-lyapunov:{}'.format(psess.run([l[i]], feed_dict={inputs:v})))
 
     out = np.array(out)
     print('predictor-output:\n{}'.format(out))
 
-    plt.scatter(range(pseq_len), out[:,0], c='b', s=1)
-    plt.figure()
-    plt.scatter(range(pseq_len), out[:,1], c='r', s=1)
-    plt.figure()
-    plt.scatter(out[:,0], out[:,1], c='r', s=1)
-    plt.show()
+    if is_plot:
+        plt.figure()
+        plt.scatter(range(pseq_len), out[:,0], c='b', s=1)
+        plt.figure()
+        plt.scatter(range(pseq_len), out[:,1], c='r', s=1)
+        plt.figure()
+        plt.scatter(out[:,0], out[:,1], c='r', s=1)
+        plt.show()
 
 
     # In case of No Learning
@@ -274,8 +304,10 @@ def main(_):
             '''
         print("output:{}".format(out))
         out = np.array(out)
-        plt.scatter(out[:,0], out[:,1], c='r', s=1)
-        plt.show()
+
+        if is_plot:
+            plt.scatter(out[:,0], out[:,1], c='r', s=1)
+            plt.show()
 
         sess.close()
 
