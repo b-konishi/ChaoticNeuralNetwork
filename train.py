@@ -6,17 +6,16 @@ import chaotic_nn_cell
 import matplotlib.pyplot as plt
 import math
 
-''' ベイズ最適化
-'''
+# ベイズ最適化
 import GPy
 import GPyOpt
 
 model_path = '../model/'
 log_path = '../logdir'
 
+MODE = 'predict'
 MODE = 'opt'
 MODE = 'train'
-MODE = 'predict'
 
 # モデルの保存
 is_save = False
@@ -27,9 +26,9 @@ activation = tf.nn.tanh
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
 seq_len = 100
 
-epoch_size = 10000
+epoch_size = 1000
 input_units = 2
-inner_units = 200
+inner_units = 20
 output_units = input_units
 
 Kf = 26.654
