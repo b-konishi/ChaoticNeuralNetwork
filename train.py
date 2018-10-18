@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import tensorflow as tf
 import numpy as np
 import chaotic_nn_cell
@@ -160,18 +162,20 @@ def predict():
     inputs = make_data(pseq_len)
     output = inference(inputs, Wi, Wo)
     l = []
+    out = psess.run(output)
     for i in range(output_units):
-        l.append(get_lyapunov(seq=output[:,i]))
+        # print('output[:,i]: {}'.format(out[:,i]))
+        l.append(get_lyapunov(seq=out[:,i]))
         print('predict-lyapunov:{}'.format(psess.run([l[i]])))
 
-    out = np.array(psess.run([output]))[0,:]
+    out = np.array(out)
     print('predictor-output:\n{}'.format(out))
 
     plt.scatter(range(pseq_len), out[:,0], c='b', s=1)
     plt.figure()
     plt.scatter(range(pseq_len), out[:,1], c='r', s=1)
     plt.figure()
-    plt.scatter(out[:,0], out[:,1], c='r')
+    plt.scatter(out[:,0], out[:,1], c='r', s=1)
     plt.show()
 
 
