@@ -10,40 +10,96 @@ import math
 import GPy
 import GPyOpt
 
+# Sound
 from scipy.io.wavfile import read
+import wave
+import array
 
 model_path = '../model/'
 log_path = '../logdir'
 
 MODE = 'opt'
-MODE = 'predict'
 MODE = 'train'
+MODE = 'predict'
 
 # モデルの保存
 is_save = False
 is_save = True
 
 # グラフ描画
-is_plot = True
 is_plot = False
+is_plot = True
 
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
 seq_len = 44100
 
-epoch_size = 1000
+epoch_size = 10000
 input_units = 2
-inner_units = 20
-output_units = input_units
+inner_units = 4
+output_units = 2
 
 Kf = 26.654
 Kr = 16.553
 Alpha = 86.721
 
-Kf = 49.471
-Kr = 24.736
-Alpha = 32.889
+'''
+Kf = 26.279
+Kr = 84.793
+Alpha = 46.165
+'''
+
+def make_data(length):
+    print('making data...')
+
+    sound1 = load_sound('../music/ifudoudou.wav')
+    sound2 = load_sound('../music/jinglebells.wav')
+
+    sound1 = sound1[0:length].reshape(length,1) * 10000
+    sound2 = sound2[0:length].reshape(length,1) * 10000
+
+    x1 = np.linspace(start=0, stop=length, num=length)
+    y1 = np.sin(2*math.pi*440*x1)
+
+    x2 = np.linspace(start=0, stop=length, num=length)
+    y2 = np.sin(2*math.pi*880*x2)
+
+    data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
+    print(np.shape(data))
+
+    '''
+    plt.figure()
+    plt.plot(range(length), data[:,0], c='b', lw=1)
+    plt.figure()
+    plt.plot(range(length), data[:,1], c='b', lw=1)
+    '''
+    
+
+    '''
+    with tf.name_scope('data'):
+        r = tf.random_uniform(shape=[input_units*3])*10
+        # r = tf.zeros([input_units*3])+1
+
+        line = tf.lin_space(0.0, 2*math.pi, num=length)
+
+        values = []
+
+        if input_units == 2:
+            values.append(tf.random_uniform(shape=[length])*10)
+            values.append(tf.sin(line)+0.1*tf.random_uniform(shape=[length]))
+            # values.append(tf.sin(line)+0.1*tf.random_uniform(shape=[length]))
+        else:
+            for i in range(input_units):
+                values.append(r[3*i] * tf.sin(r[3*i+1]*line+r[3*i+2]))
+
+        inputs = tf.transpose(tf.reshape(values, shape=[input_units, length]))
+
+        # random-input
+        # inputs = tf.random_uniform(shape=[length, input_units])
+    '''
+
+    return data
 
 def weight(shape = []):
     initial = tf.truncated_normal(shape, stddev = 0.01)
@@ -110,33 +166,30 @@ def train(error):
 
     return training
 
-def make_data(length):
-    with tf.name_scope('data'):
-        r = tf.random_uniform(shape=[input_units*3])*10
-        # r = tf.zeros([input_units*3])+1
 
-        line = tf.lin_space(0.0, 2*math.pi, num=length)
+def load_sound(filename):
+    fs, sound = read(filename)
+    if (sound.shape[1] == 2):
+        sound = sound[:,0]
 
-        values = []
+    return sound
 
-        if input_units == 2:
-            values.append(tf.random_uniform(shape=[length])*10)
-            values.append(tf.sin(line)+0.1*tf.random_uniform(shape=[length]))
-            # values.append(tf.sin(line)+0.1*tf.random_uniform(shape=[length]))
-        else:
-            for i in range(input_units):
-                values.append(r[3*i] * tf.sin(r[3*i+1]*line+r[3*i+2]))
-
-        inputs = tf.transpose(tf.reshape(values, shape=[input_units, length]))
-
-        # random-input
-        # inputs = tf.random_uniform(shape=[length, input_units])
-
-    return inputs
+def save_sound(sampling, data, filename):
+    w = wave.Wave_write(filename)
+    w.setparams((
+        1,                        # channel
+        2,                        # byte width
+        sampling,                    # sampling rate
+        len(data),            # number of frames
+        "NONE", "not compressed"  # no compression
+    ))
+    w.writeframes(array.array('h', data).tostring())
+    w.close()
+    print('saving sound...')
 
 def predict():
     compare = False
-    pseq_len = 1000
+    pseq_len = 10000
     psess = tf.InteractiveSession()
 
     saver = tf.train.import_meta_graph(model_path + 'model.ckpt.meta')
@@ -154,38 +207,33 @@ def predict():
 
     print('predict')
 
-    wavfile1 = "./music/jinglebells.wav"
-    wavfile2 = "./music/springsonate.wav"
-    fs1, data1 = read(wavfile1)
-    fs2, data2 = read(wavfile2)
-    if (data1.shape[1] == 2):
-        left1 = data1[20000:20000+pseq_len, 0]
-        right1 = data1[20000:20000+pseq_len, 1]
-    if (data2.shape[1] == 2):
-        left2 = data2[20000:20000+pseq_len, 0]
-        right2 = data2[20000:20000+pseq_len, 1]
-    left1 = left1.reshape((pseq_len,1))
-    left2 = right2.reshape((pseq_len,1))
-    v = np.resize([left1,left2],(pseq_len, input_units))
+    data1 = load_sound('../music/ifudoudou.wav')
+    '''
+    data2 = load_sound('../music/jinglebells.wav')
 
-    plt.figure()
-    plt.plot(range(pseq_len), left1, c='b')
-    plt.figure()
-    plt.plot(range(pseq_len), left2, c='b')
+    data1 = data1[0:pseq_len].reshape(pseq_len,1)
+    data2 = data2[0:pseq_len].reshape(pseq_len,1)
 
-    inputs = tf.placeholder(dtype = tf.float32, shape = [pseq_len, input_units], name='inputs')
+    v = np.resize([data1,data2],(pseq_len, input_units))
+    '''
+    data = make_data(pseq_len)*100000
+    inputs = tf.placeholder(dtype = tf.float32, shape = [None, input_units], name='inputs')
 
+    feed_dict={inputs:data}
     # inputs = make_data(pseq_len)
     output = inference(inputs, Wi, Wo)
     l = []
-    out = psess.run(output, feed_dict={inputs:v})
+    out = psess.run(output, feed_dict=feed_dict)
     for i in range(output_units):
         # print('output[:,i]: {}'.format(out[:,i]))
         l.append(get_lyapunov(seq=out[:,i]))
-        print('predict-lyapunov:{}'.format(psess.run([l[i]], feed_dict={inputs:v})))
+        print('predict-lyapunov:{}'.format(psess.run([l[i]], feed_dict=feed_dict)))
 
     out = np.array(out)
     print('predictor-output:\n{}'.format(out))
+
+    print('num: {}, unique: {}'.format(len(out[:,0]), len(set(out[:,0]))))
+    print('mean: {}'.format(np.mean(out)))
 
     if is_plot:
         plt.figure()
@@ -193,9 +241,22 @@ def predict():
         plt.figure()
         plt.scatter(range(pseq_len), out[:,1], c='r', s=1)
         plt.figure()
-        plt.scatter(out[:,0], out[:,1], c='r', s=1)
+        plt.plot(out[:,0], out[:,1], c='r', lw=0.3)
+
+        '''
+        plt.figure()
+        plt.plot(out[:,0], out[:,1], c='r', lw=1)
+        '''
         plt.show()
 
+
+    out = out * 1000
+    sampling = 44100
+    save_sound(sampling, out[:,0], '../music/chaos.wav')
+    save_sound(sampling, out[:,1], '../music/chaos2.wav')
+
+    np.random.rand(pseq_len)*1000
+    save_sound(sampling, out[:,0], '../music/random.wav')
 
     # In case of No Learning
     if compare:
@@ -213,6 +274,10 @@ def predict():
             print('no-learning-lyapunov::{}'.format(psess.run([l[i]])))
 
         print('no-learning-output:\n{}'.format(psess.run([output])))
+
+
+
+
 
 def opt(x):
     kf = x[:,0]
@@ -245,8 +310,12 @@ def main(_):
 
     if MODE == 'train':
         sess = tf.InteractiveSession()
-        
-        inputs = make_data(seq_len)
+
+        with tf.name_scope('data'):
+            inputs = tf.placeholder(dtype = tf.float32, shape = [None, input_units], name='inputs')
+            data = make_data(seq_len)
+
+
 
         with tf.name_scope('Wi'):
             Wi = tf.Variable(weight(shape=[input_units, inner_units]), name='Wi')
@@ -276,7 +345,7 @@ def main(_):
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
 
-        feed_dict = {}
+        feed_dict = {inputs:data}
         merged = tf.summary.merge_all()
         
         for epoch in range(epoch_size):
@@ -306,7 +375,12 @@ def main(_):
         out = np.array(out)
 
         if is_plot:
-            plt.scatter(out[:,0], out[:,1], c='r', s=1)
+            plt.figure()
+            plt.scatter(range(seq_len), out[:,0], c='b', s=1)
+            plt.figure()
+            plt.scatter(range(seq_len), out[:,1], c='r', s=1)
+            plt.figure()
+            plt.plot(out[:,0], out[:,1], c='r', lw=1)
             plt.show()
 
         sess.close()

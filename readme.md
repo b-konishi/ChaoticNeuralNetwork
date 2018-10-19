@@ -65,19 +65,7 @@ Their libraries can easily execute Bayesian-Optimization.
 You can optimize the arguments of the function.
 In detail, see my code.
 
-As for caution, the parameters which you wanna optimize must be written by the order, first, continuous-params, next, discrete-params.
-
-
-
-
-
-
-
-
-
-
-
-
+As for caution, the parameters which you wanna optimize must be written by the order(continuous-params, discrete-params).
 
 
 
