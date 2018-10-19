@@ -3,17 +3,13 @@
 import tensorflow as tf
 import numpy as np
 import chaotic_nn_cell
+import my_library as my
 import matplotlib.pyplot as plt
 import math
 
 # ベイズ最適化
 import GPy
 import GPyOpt
-
-# Sound
-from scipy.io.wavfile import read
-import wave
-import array
 
 model_path = '../model/'
 log_path = '../logdir'
@@ -27,15 +23,15 @@ is_save = False
 is_save = True
 
 # グラフ描画
-is_plot = False
 is_plot = True
+is_plot = False
 
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
 seq_len = 44100
 
-epoch_size = 10000
+epoch_size = 1000
 input_units = 2
 inner_units = 4
 output_units = 2
@@ -50,23 +46,29 @@ Kr = 84.793
 Alpha = 46.165
 '''
 
-def make_data(length):
+def make_data(length, loop=0):
     print('making data...')
 
-    sound1 = load_sound('../music/ifudoudou.wav')
-    sound2 = load_sound('../music/jinglebells.wav')
+    sound1 = my.Sound.load_sound('../music/ifudoudou.wav')
+    sound2 = my.Sound.load_sound('../music/jinglebells.wav')
+    sound1 = my.Sound.load_sound('../music/jinglebells.wav')
+    sound2 = my.Sound.load_sound('../music/ifudoudou.wav')
 
-    sound1 = sound1[0:length].reshape(length,1) * 10000
-    sound2 = sound2[0:length].reshape(length,1) * 10000
+    if ((loop+1)*length > len(sound1) or (loop+1)*length > len(sound2)):
+        loop = 0
+
+    sound1 = sound1[loop*length:(loop+1)*length].reshape(length,1) * 10000
+    sound2 = sound2[loop*length:(loop+1)*length].reshape(length,1) * 10000
+
 
     x1 = np.linspace(start=0, stop=length, num=length)
-    y1 = np.sin(2*math.pi*440*x1)
+    y1 = np.sin(x1)
 
     x2 = np.linspace(start=0, stop=length, num=length)
-    y2 = np.sin(2*math.pi*880*x2)
+    y2 = np.sin(2*x2)
 
     data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
-    print(np.shape(data))
+    data = np.resize(np.transpose([y1,y2]),(length, input_units))
 
     '''
     plt.figure()
@@ -75,30 +77,6 @@ def make_data(length):
     plt.plot(range(length), data[:,1], c='b', lw=1)
     '''
     
-
-    '''
-    with tf.name_scope('data'):
-        r = tf.random_uniform(shape=[input_units*3])*10
-        # r = tf.zeros([input_units*3])+1
-
-        line = tf.lin_space(0.0, 2*math.pi, num=length)
-
-        values = []
-
-        if input_units == 2:
-            values.append(tf.random_uniform(shape=[length])*10)
-            values.append(tf.sin(line)+0.1*tf.random_uniform(shape=[length]))
-            # values.append(tf.sin(line)+0.1*tf.random_uniform(shape=[length]))
-        else:
-            for i in range(input_units):
-                values.append(r[3*i] * tf.sin(r[3*i+1]*line+r[3*i+2]))
-
-        inputs = tf.transpose(tf.reshape(values, shape=[input_units, length]))
-
-        # random-input
-        # inputs = tf.random_uniform(shape=[length, input_units])
-    '''
-
     return data
 
 def weight(shape = []):
@@ -167,29 +145,10 @@ def train(error):
     return training
 
 
-def load_sound(filename):
-    fs, sound = read(filename)
-    if (sound.shape[1] == 2):
-        sound = sound[:,0]
-
-    return sound
-
-def save_sound(sampling, data, filename):
-    w = wave.Wave_write(filename)
-    w.setparams((
-        1,                        # channel
-        2,                        # byte width
-        sampling,                    # sampling rate
-        len(data),            # number of frames
-        "NONE", "not compressed"  # no compression
-    ))
-    w.writeframes(array.array('h', data).tostring())
-    w.close()
-    print('saving sound...')
 
 def predict():
-    compare = False
-    pseq_len = 10000
+    compare = True
+    pseq_len = 44100 * 20
     psess = tf.InteractiveSession()
 
     saver = tf.train.import_meta_graph(model_path + 'model.ckpt.meta')
@@ -207,16 +166,7 @@ def predict():
 
     print('predict')
 
-    data1 = load_sound('../music/ifudoudou.wav')
-    '''
-    data2 = load_sound('../music/jinglebells.wav')
-
-    data1 = data1[0:pseq_len].reshape(pseq_len,1)
-    data2 = data2[0:pseq_len].reshape(pseq_len,1)
-
-    v = np.resize([data1,data2],(pseq_len, input_units))
-    '''
-    data = make_data(pseq_len)*100000
+    data = make_data(pseq_len, loop=1)*100000
     inputs = tf.placeholder(dtype = tf.float32, shape = [None, input_units], name='inputs')
 
     feed_dict={inputs:data}
@@ -240,23 +190,20 @@ def predict():
         plt.scatter(range(pseq_len), out[:,0], c='b', s=1)
         plt.figure()
         plt.scatter(range(pseq_len), out[:,1], c='r', s=1)
-        plt.figure()
-        plt.plot(out[:,0], out[:,1], c='r', lw=0.3)
+        # plt.figure()
+        # plt.plot(out[:,0], out[:,1], c='r', lw=0.3)
 
-        '''
-        plt.figure()
-        plt.plot(out[:,0], out[:,1], c='r', lw=1)
-        '''
         plt.show()
 
 
     out = out * 1000
+    print('predictor-output:\n{}'.format(out))
     sampling = 44100
-    save_sound(sampling, out[:,0], '../music/chaos.wav')
-    save_sound(sampling, out[:,1], '../music/chaos2.wav')
+    my.Sound.save_sound(sampling, out[:,0], '../music/chaos.wav')
+    my.Sound.save_sound(sampling, out[:,1], '../music/chaos2.wav')
 
-    np.random.rand(pseq_len)*1000
-    save_sound(sampling, out[:,0], '../music/random.wav')
+    # random_sound = np.random.rand(pseq_len)*1000
+    # save_sound(sampling, random_sound.astype(np.int), '../music/random.wav')
 
     # In case of No Learning
     if compare:
@@ -266,17 +213,21 @@ def predict():
         init_op = tf.global_variables_initializer()
         psess.run(init_op)
 
-        inputs = make_data(pseq_len)
+        data_nolearn = make_data(pseq_len, loop=1)
         output = inference(inputs, Wi, Wo)
+        feed_dict={inputs:data_nolearn}
         l = []
         for i in range(output_units):
             l.append(get_lyapunov(seq=output[:,i]))
-            print('no-learning-lyapunov::{}'.format(psess.run([l[i]])))
+            print('no-learning-lyapunov::{}'.format(psess.run(l[i], feed_dict=feed_dict)))
 
-        print('no-learning-output:\n{}'.format(psess.run([output])))
+        out_nolearn = psess.run(output, feed_dict=feed_dict)
+        print('no-learning-output:\n{}'.format(out_nolearn))
 
-
-
+        out_nolearn = out_nolearn * float(10000)
+        print('no-learning-output:\n{}'.format(out_nolearn))
+        my.Sound.save_sound(sampling, out_nolearn[:,0], '../music/chaos_no.wav')
+        my.Sound.save_sound(sampling, out_nolearn[:,1], '../music/chaos_no2.wav')
 
 
 def opt(x):
@@ -313,7 +264,6 @@ def main(_):
 
         with tf.name_scope('data'):
             inputs = tf.placeholder(dtype = tf.float32, shape = [None, input_units], name='inputs')
-            data = make_data(seq_len)
 
 
 
@@ -345,10 +295,12 @@ def main(_):
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
 
-        feed_dict = {inputs:data}
         merged = tf.summary.merge_all()
         
         for epoch in range(epoch_size):
+            data = make_data(seq_len, loop=epoch)
+            feed_dict = {inputs:data}
+
             if epoch%100 == 0:
                 print('epoch:{}-times'.format(epoch))
 
