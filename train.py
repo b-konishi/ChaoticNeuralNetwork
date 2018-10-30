@@ -2,10 +2,13 @@
 
 import tensorflow as tf
 import numpy as np
-import chaotic_nn_cell
 import my_library as my
 import matplotlib.pyplot as plt
 import math
+
+# my library
+import chaotic_nn_cell
+import info_content
 
 # ベイズ最適化
 import GPy
@@ -15,21 +18,21 @@ model_path = '../model/'
 log_path = '../logdir'
 
 MODE = 'opt'
-MODE = 'train'
 MODE = 'predict'
+MODE = 'train'
 
 # モデルの保存
 is_save = False
 is_save = True
 
 # グラフ描画
-is_plot = False
 is_plot = True
+is_plot = False
 
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 10000
+seq_len = 1000
 
 epoch_size = 1000
 input_units = 2
@@ -37,13 +40,13 @@ inner_units = 10
 output_units = 2
 
 # 中間層層数
-inner_layers = 3
+inner_layers = 1
 
 Kf = 9.750
 Kr = 16.872
 Alpha = 36.552
 
-tau = 10
+tau = 20
 
 '''
 Kf = 26.279
@@ -74,7 +77,7 @@ def make_data(length, loop=0):
     x2 = np.linspace(start=0, stop=length, num=length).reshape(length,1)
     y2 = np.sin(2*x2)
 
-    data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
+    # data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
     data = np.resize(np.transpose([y1,y2]),(length, input_units))
     # data = np.resize(np.transpose([y1,sound1]),(length, input_units))
 
@@ -141,15 +144,22 @@ def get_lyapunov(seq, dt=1/seq_len):
     となるため、プログラム上のリアプノフ指数の定義は、
     mean(log(1+f')-log(2))とする（0以上ならばカオス性を持つという性質は変わらない）
     '''
-    # lyapunov = tf.reduce_mean(tf.log1p(diff/dt)-tf.log(tf.cast(2.0, tf.float64)))
-    lyapunov = tf.reduce_mean(tf.log1p(diff)))
+    lyapunov = tf.reduce_mean(tf.log1p(diff/dt)-tf.log(tf.cast(2.0, tf.float64)))
+    # lyapunov = tf.reduce_mean(tf.log1p(diff))
 
     return lyapunov
 
 def loss(output):
-    with tf.name_scope('loss'):
+    print('output::{}'.format(output))
+
+
+    with tf.name_scope('loss_tf'):
+        # Transfer Entropyが増加するように誤差関数を設定
+        pass
+        
+
+    with tf.name_scope('loss_lyapunov'):
         # リアプノフ指数が増加するように誤差関数を設定
-        print('output::{}'.format(output))
         lyapunov = []
         loss = []
         for i in range(output_units):
@@ -382,16 +392,18 @@ def main(_):
             t = sess.run(train_step, feed_dict=feed_dict)
             summary, out, error_val, l = sess.run([merged, output, error, lyapunov], feed_dict=feed_dict)
             
+            '''
             l_list.append(l[0])
             if epoch%10 == 0:
                 print('lapunov: ', l)
+            '''
 
             # print("output:{}".format(out))
             # print("error:{}".format(error_val))
             # print("lyapunov:{}".format(sess.run(tf.reduce_max(error_val))))
             writer.add_summary(summary, epoch)
 
-        plt.plot(range(epoch_size), (l_list), c='b', lw=1)
+        # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
 
         if is_save:
             # 特定の変数だけ保存するときに使用
