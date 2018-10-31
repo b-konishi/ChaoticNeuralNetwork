@@ -8,7 +8,7 @@ import math
 
 # my library
 import chaotic_nn_cell
-import info_content
+import info_content as ic
 
 # ベイズ最適化
 import GPy
@@ -26,18 +26,18 @@ is_save = False
 is_save = True
 
 # グラフ描画
-is_plot = True
 is_plot = False
+is_plot = True
 
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 1000
+seq_len = 10
 
 epoch_size = 1000
 input_units = 2
 inner_units = 10
-output_units = 2
+output_units = 1
 
 # 中間層層数
 inner_layers = 1
@@ -78,7 +78,7 @@ def make_data(length, loop=0):
     y2 = np.sin(2*x2)
 
     # data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
-    data = np.resize(np.transpose([y1,y2]),(length, input_units))
+    data = np.resize(np.transpose([y1, y2]),(length, input_units))
     # data = np.resize(np.transpose([y1,sound1]),(length, input_units))
 
     '''
@@ -126,11 +126,13 @@ def inference(inputs, Wi, Wo):
     return fo
 
 def get_lyapunov(seq, dt=1/seq_len):
+    '''
     with tf.name_scope('normalization'):
         moment = tf.nn.moments(seq, [0])
         m = moment[0]
         v = moment[1]
         seq = (seq-m)/tf.sqrt(v)
+    '''
     
     seq_shift = tf.manip.roll(seq, shift=1, axis=0)
     diff = tf.abs(seq - seq_shift)
@@ -149,31 +151,50 @@ def get_lyapunov(seq, dt=1/seq_len):
 
     return lyapunov
 
-def loss(output):
-    print('output::{}'.format(output))
+def loss(inputs, outputs, Entropy):
+    print('output::{}'.format(outputs))
 
 
     with tf.name_scope('loss_tf'):
         # Transfer Entropyが増加するように誤差関数を設定
-        pass
-        
+        # Entropy = ic.info_content.get_TE_for_tf( outputs[:,0],inputs[:,0], Entropy, seq_len)
+        # Entropy = tf.reduce_mean(tf.log1p(outputs[:,0]))
+
+        '''
+        p = dict()
+        ic = dict()
+
+        for i in range(seq_len):
+            p[outputs[i,0]] = p.get(outputs[i,0], 0) + 1/seq_len
+
+        for (xi, pi) in p.items():
+            ic[xi] = ic.get(-np.log2(pi), 0)
+
+        for (xi, pi) in p.items():
+            Entropy = Entropy + pi*ic.get(xi)
+        '''
+
+    # return -Entropy
+
 
     with tf.name_scope('loss_lyapunov'):
         # リアプノフ指数が増加するように誤差関数を設定
         lyapunov = []
         loss = []
         for i in range(output_units):
-            lyapunov.append(get_lyapunov(output[:,i]))
+            lyapunov.append(get_lyapunov(outputs[:,i]))
             # loss.append(1/(1+tf.exp(lyapunov[i])))
             # loss.append(tf.exp(-lyapunov[i]))
             loss.append(-lyapunov[i])
 
+        return tf.reduce_max(lyapunov)
 
         # リアプノフ指数を取得(評価の際は最大リアプノフ指数をとる)
         # return tf.reduce_sum(loss), lyapunov
         return tf.reduce_max(loss), lyapunov
         # return tf.reduce_min(loss), lyapunov
         # return loss, lyapunov
+
 
 def train(error):
     # return tf.train.GradientDescentOptimizer(learning_rate=0.001).minimize(error)
@@ -348,8 +369,7 @@ def main(_):
         sess = tf.InteractiveSession()
 
         with tf.name_scope('data'):
-            inputs = tf.placeholder(dtype = tf.float64, shape = [None, input_units], name='inputs')
-
+            inputs = tf.placeholder(dtype = tf.float64, shape = [seq_len, input_units], name='inputs')
         with tf.name_scope('Wi'):
             Wi = tf.Variable(weight(shape=[input_units, inner_units]), name='Wi')
             tf.summary.histogram('Wi', Wi)
@@ -358,12 +378,19 @@ def main(_):
             Wo = tf.Variable(weight(shape=[inner_units, output_units]), name='Wo')
             tf.summary.histogram('Wo', Wo)
 
-        output = inference(inputs, Wi, Wo)
-        error, lyapunov = loss(output)
+        with tf.name_scope('Entropy'):
+            Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
+            tf.summary.scalar('Entropy', Entropy)
 
+
+        outputs = inference(inputs, Wi, Wo)
+        error = loss(inputs, outputs, Entropy)
+
+        '''
         with tf.name_scope('lyapunov'):
             for i in range(output_units):
                 tf.summary.scalar('lyapunov'+str(i), lyapunov[i])
+        '''
 
         tf.summary.scalar('error', error)
         train_step = train(error)
@@ -380,17 +407,27 @@ def main(_):
         merged = tf.summary.merge_all()
         
         l_list = []
+        data = []
         for epoch in range(epoch_size):
             data = make_data(seq_len, loop=epoch)
             feed_dict = {inputs:data}
 
-            if epoch%100 == 0:
-                print('epoch:{}-times'.format(epoch))
-
             # print(sess.run(inputs))
 
             t = sess.run(train_step, feed_dict=feed_dict)
-            summary, out, error_val, l = sess.run([merged, output, error, lyapunov], feed_dict=feed_dict)
+            summary, out, error_val= sess.run([merged, outputs, error], feed_dict=feed_dict)
+
+            if epoch%100 == 0:
+                print('epoch:{}-times'.format(epoch))
+
+                if is_plot:
+                    plt.figure()
+                    data1 = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
+                    out1 = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
+
+                    plt.plot(range(seq_len), data1, c='b', lw=1)
+                    plt.plot(range(seq_len), out1, c='r', lw=1)
+                    plt.show()
             
             '''
             l_list.append(l[0])
@@ -399,7 +436,7 @@ def main(_):
             '''
 
             # print("output:{}".format(out))
-            # print("error:{}".format(error_val))
+            print("error:{}".format(error_val))
             # print("lyapunov:{}".format(sess.run(tf.reduce_max(error_val))))
             writer.add_summary(summary, epoch)
 
@@ -419,13 +456,19 @@ def main(_):
         out = np.array(out)
 
         if is_plot:
+            '''
             plt.figure()
-            plt.scatter(range(seq_len), out[:,0], c='b', s=1)
+            data = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
+            out = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
+
+            plt.plot(range(seq_len), data, c='b', lw=1)
+            plt.plot(range(seq_len), out, c='r', lw=1)
+
             plt.figure()
             plt.scatter(range(seq_len), out[:,1], c='r', s=1)
             plt.figure()
             plt.plot(out[:,0], out[:,1], c='r', lw=1)
-            plt.show()
+            '''
 
         sess.close()
 

@@ -2,22 +2,8 @@
 import math
 import numpy as np
 
-'''
-yseq = [1,1,1,2,3]
+import tensorflow as tf
 
-N = 1
-
-px, py, p = dict(), dict(), dict()
-
-for (x, y) in zip(xseq, yseq):
-    px[x] = px.get(x,0) + 1
-    py[y] = py.get(y,0) + 1
-    p[(x,y)] = p.get((x,y),0) + 1
-
-print('px: ', px)
-print('py: ', py)
-print('p: ', p)
-'''
 
 class info_content():
 
@@ -28,6 +14,7 @@ class info_content():
             p[xi] = p.get(xi,0) + 1/len(x)
         
         return p
+
 
     def get_prob2(self, x, y):
         px, py, p = dict(), dict(), dict()
@@ -69,8 +56,8 @@ class info_content():
 
 
     def get_EN(self, prob):
-        enx, eny, en = 0, 0, 0;
-        px, py, p = prob;
+        enx, eny, en = 0, 0, 0
+        px, py, p = prob
         icx, icy, ic = get_IC(prob)
 
         for (xi, pi) in px.items():
@@ -101,23 +88,23 @@ class info_content():
 
         return enx + eny - en
 
-    def get_TF(self, x, y):
+    def get_TE(self, x, y):
 
         px = self.get_prob(x[:-1])
         _,_,p2 = self.get_prob2(x[:-1], y[:-1])
         _,_,px2 = self.get_prob2(x[1:], x[:-1])
         _, _, _, p3 = self.get_prob3(x[1:], x[:-1], y[:-1])
 
-        tf = 0
+        te = 0
         for ((xi1,xi,yi),pi) in p3.items():
             a = pi * px.get(xi)
             b = p2.get((xi,yi)) * px2.get((xi1,xi))
 
-            tf = tf + pi*math.log(a/b, 2)
+            te = te + pi*math.log(a/b, 2)
 
-        return tf
+        return te
 
-    def get_TF2(self, x, y):
+    def get_TE2(self, x, y):
         xmax, xmin = max(x), min(x)
         ymax, ymin = max(y), min(y)
 
@@ -139,14 +126,48 @@ class info_content():
             pxx[(norm_x1, norm_x)] = pxx.get((norm_x1, norm_x), 0) + 1/N
             pxy[(norm_x, norm_y)] = pxy.get((norm_x, norm_y), 0) + 1/N
 
-        tf = 0
+        te = 0
         for ((xi1, xi, yi), pi) in p.items():
             a = pi * px.get(xi)
             b = pxy.get((xi, yi)) * pxx.get((xi1, xi))
 
-            tf = tf + pi*np.log2(a/b)
+            te = te + pi*np.log2(a/b)
 
-        return tf
+        return te
+
+
+    def get_TE_for_tf(x, y, TE, length):
+        print('\n##### TRANSFER ENTROPY FOR TENSORFLOW #####')
+
+        xmax, xmin = tf.reduce_max(x), tf.reduce_min(x)
+        ymax, ymin = tf.reduce_max(y), tf.reduce_min(y)
+
+        N = length - 1
+        Nx = int(np.log2(N) + 1)
+        Ny = Nx
+        print('N: ', N)
+        print('bin: ', Nx)
+
+        p, px, pxx, pxy = dict(), dict(), dict(), dict()
+
+        for i in range(length-1):
+            norm_x1 = tf.cast(Nx * (x[i+1]-xmin)/(xmax-xmin), tf.int64)
+            norm_x = tf.cast(Nx * (x[i]-xmin)/(xmax-xmin), tf.int64)
+            norm_y = tf.cast(Ny * (y[i]-ymin)/(ymax-ymin), tf.int64)
+
+            p[(norm_x1, norm_x, norm_y)] = p.get((norm_x1, norm_x, norm_y), 0) + 1/N
+            px[norm_x] = px.get(norm_x, 0) + 1/N
+            pxx[(norm_x1, norm_x)] = pxx.get((norm_x1, norm_x), 0) + 1/N
+            pxy[(norm_x, norm_y)] = pxy.get((norm_x, norm_y), 0) + 1/N
+
+        for ((xi1, xi, yi), pi) in p.items():
+            a = pi * px.get(xi)
+            b = pxy.get((xi, yi)) * pxx.get((xi1, xi))
+
+            TE = TE + pi*np.log2(a/b)
+
+        return TE
+
             
 
 
@@ -169,16 +190,16 @@ if len(xseq) != len(yseq):
     print('not equal length')
 
 print('\n##### TRANSFER ENTROPY1 #####')
-tf_xy = ic.get_TF(yseq, xseq)
-tf_yx = ic.get_TF(xseq, yseq)
-print('tf_x->y: ', tf_xy)
-print('tf_y->x: ', tf_yx)
+te_xy = ic.get_TE(yseq, xseq)
+te_yx = ic.get_TE(xseq, yseq)
+print('te_x->y: ', te_xy)
+print('te_y->x: ', te_yx)
 
 print('\n##### TRANSFER ENTROPY2 #####')
-tf_xy = ic.get_TF2(yseq, xseq)
-tf_yx = ic.get_TF2(xseq, yseq)
-print('tf_x->y: ', tf_xy)
-print('tf_y->x: ', tf_yx)
+te_xy = ic.get_TE2(yseq, xseq)
+te_yx = ic.get_TE2(xseq, yseq)
+print('te_x->y: ', te_xy)
+print('te_y->x: ', te_yx)
 
 '''
 print('\n##### DATA #####')
