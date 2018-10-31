@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import math
 import numpy as np
+import itertools
 
 import tensorflow as tf
-
+import matplotlib.pyplot as plt
 
 class info_content():
 
@@ -168,7 +169,148 @@ class info_content():
 
         return TE
 
+    def get_TE_for_tf2(x, y, TE, length):
+        print('\n##### TRANSFER ENTROPY FOR TENSORFLOW #####')
+
+        xmax, xmin = tf.reduce_max(x), tf.reduce_min(x)
+        ymax, ymin = tf.reduce_max(y), tf.reduce_min(y)
+
+        N = length - 1
+        Nx = int(np.log2(N) + 1)
+        Ny = Nx
+        print('N: ', N)
+        print('bin: ', Nx)
+
+        p = tf.Variable(tf.zeros([Nx,Nx,Ny], tf.float64), dtype=tf.float64)
+        px = tf.Variable(tf.zeros([Nx,], tf.float64), dtype=tf.float64)
+        pxx = tf.Variable(tf.zeros([Nx,Nx], tf.float64), dtype=tf.float64)
+        pxy = tf.Variable(tf.zeros([Nx,Ny], tf.float64), dtype=tf.float64)
+
+        norm_x = tf.cast(Nx * (x-xmin)/(xmax-xmin), tf.int32)
+        norm_y = tf.cast(Ny * (y-ymin)/(ymax-ymin), tf.int32)
+
+        px1 = tf.bincount(norm_x[:-1])
+
+        for i in range(length-1):
+            '''
+            norm_x1 = tf.cast(Nx * (x[i+1]-xmin)/(xmax-xmin), tf.int64)
+            norm_x = tf.cast(Nx * (x[i]-xmin)/(xmax-xmin), tf.int64)
+            norm_y = tf.cast(Ny * (y[i]-ymin)/(ymax-ymin), tf.int64)
+            '''
+
+            p[norm_x[i+1], norm_x[i], norm_y[i]].assign(p[norm_x[i+1], norm_x[i], norm_y[i]] + 1/N)
+            px[norm_x[i]].assign(px[norm_x[i]] + 1/N)
+            pxx[norm_x[i+1], norm_x[i]].assign(pxx[norm_x[i+1], norm_x[i]] + 1/N)
+            pxy[norm_x[i], norm_y[i]].assign(pxy[norm_x[i], norm_y[i]] + 1/N)
+
+        
+        for i in range(Nx):
+            for j in range(Nx):
+                for k in range(Ny):
+                    if p[i,j,k] != 0:
+                        a = p[i,j,k] * px[j]
+                        b = pxy[j,k] * pxx[i,j]
+                        TE = TE + p[i,j,k]*(tf.log(a/b)/tf.log(tf.cast(2.0, dtype=tf.float64)))
+
+        return TE, p
+
+    def get_TE_for_tf3(self, x, y, length):
+        print('\n##### TRANSFER ENTROPY FOR TENSORFLOW #####')
+        print('x: ', x)
+        print('y: ', y)
+
+        with tf.name_scope('Entropy'):
+            Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
+            tf.summary.scalar('Entropy', Entropy)
+
+        xmax, xmin = tf.reduce_max(x), tf.reduce_min(x)
+        ymax, ymin = tf.reduce_max(y), tf.reduce_min(y)
+
+        N = length - 1
+        Nx = int(np.log2(N) + 1)
+        # Nx = 5
+        Ny = Nx
+        print('N: ', N)
+        print('bin: ', Nx)
+
+
+
+        norm_x = tf.cast(Nx * (x-xmin)/(xmax-xmin), tf.int64)
+        norm_y = tf.cast(Ny * (y-ymin)/(ymax-ymin), tf.int64)
+
+        p_shapes = tf.constant([Nx+1, Nx+1, Ny+1], dtype=tf.int64)
+        px_shapes = tf.constant([Nx+1], dtype=tf.int64)
+        pxx_shapes = tf.constant([Nx+1, Nx+1], dtype=tf.int64)
+        pxy_shapes = tf.constant([Nx+1, Ny+1], dtype=tf.int64)
+
+        v = tf.constant([1], dtype=tf.float64)
+
+        p_indices = tf.Variable([[norm_x[1], norm_x[0], norm_y[0]]], dtype=tf.int64)
+        px_indices = tf.Variable([[norm_x[0]]], dtype=tf.int64)
+        pxx_indices = tf.Variable([[norm_x[1], norm_x[0]]], dtype=tf.int64)
+        pxy_indices = tf.Variable([[norm_x[0], norm_y[0]]], dtype=tf.int64)
+
+        p = tf.SparseTensor(p_indices, v, p_shapes)
+        px = tf.SparseTensor(px_indices, v, px_shapes)
+        pxx = tf.SparseTensor(pxx_indices, v, pxx_shapes)
+        pxy = tf.SparseTensor(pxy_indices, v, pxy_shapes)
+
+        sum_p = tf.sparse_tensor_to_dense(p, default_value=0)
+        sum_px = tf.sparse_tensor_to_dense(px, default_value=0)
+        sum_pxx = tf.sparse_tensor_to_dense(pxx, default_value=0)
+        sum_pxy = tf.sparse_tensor_to_dense(pxy, default_value=0)
+
+        for i in range(1,length-1):
+            p_indices = tf.Variable([[norm_x[i+1], norm_x[i], norm_y[i]]], dtype=tf.int64)
+            px_indices = tf.Variable([[norm_x[i]]], dtype=tf.int64)
+            pxx_indices = tf.Variable([[norm_x[i+1], norm_x[i]]], dtype=tf.int64)
+            pxy_indices = tf.Variable([[norm_x[i], norm_y[i]]], dtype=tf.int64)
+
+            q = tf.SparseTensor(p_indices, v, p_shapes)
+            qx = tf.SparseTensor(px_indices, v, px_shapes)
+            qxx = tf.SparseTensor(pxx_indices, v, pxx_shapes)
+            qxy = tf.SparseTensor(pxy_indices, v, pxy_shapes)
+
+            q1 = tf.sparse_tensor_to_dense(q, default_value=0)
+            qx1 = tf.sparse_tensor_to_dense(qx, default_value=0)
+            qxx1 = tf.sparse_tensor_to_dense(qxx, default_value=0)
+            qxy1 = tf.sparse_tensor_to_dense(qxy, default_value=0)
+
+            sum_p = sum_p + q1
+            sum_px = sum_px + qx1
+            sum_pxx = sum_pxx + qxx1
+            sum_pxy = sum_pxy + qxy1
+            '''
+            p = tf.sparse_concat(-1, [p,q])
+            px = tf.sparse_concat(-1, [px,qx])
+            pxx = tf.sparse_concat(-1, [pxx,qxx])
+            pxy = tf.sparse_concat(-1, [pxy,qxy])
+            '''
+
+        '''
+        p1 = tf.sparse_tensor_to_dense(p, default_value=0)
+        px1 = tf.sparse_tensor_to_dense(px, default_value=0)
+        pxx1 = tf.sparse_tensor_to_dense(pxx, default_value=0)
+        pxy1 = tf.sparse_tensor_to_dense(pxy, default_value=0)
+        '''
+
+        l = list(itertools.product(range(Nx), range(Nx), range(Ny)))
+        for i,j,k in l:
+            prob = (sum_p[i,j,k]/N, sum_px[j]/N, sum_pxx[i,j]/N, sum_pxy[j,k]/N)
+            Entropy = Entropy + tf.cond(tf.equal(sum_p[i,j,k],0), lambda:tf.cast(0, tf.float64), lambda:self.get(prob))
+        
+        pdf = (sum_p, sum_px, sum_pxx, sum_pxy)
+
+        return Entropy, pdf
             
+
+    def get(self, prob):
+        (p, px, pxx, pxy) = prob
+        a = tf.cast(p * px, dtype=tf.float64)
+        b = tf.cast(pxy * pxx, dtype=tf.float64)
+        return p*(tf.log(a/b)/tf.cast(2.0, dtype=tf.float64))
+
+
 
 
 ### TEST ###
@@ -177,14 +319,21 @@ ic = info_content()
 xseq = [1,1,1,0,1,1,0,1,0,0,1,1,0,0,1,1,1,0,1,1,0,1]
 yseq = [1,0,1,0,1,0,1,0,1,1,0,1,1,0,1,1,0,1,1,0,0,1]
 
-xseq = np.random.rand(100)*2 - 1
-yseq = 2*xseq[1:] + 0.01*np.random.rand()
-xseq = xseq[:-1]
+yseq = np.random.rand(100)*2 - 1
+xseq = yseq[1:]
+yseq = yseq[:-1]
 '''
 x: [x0, x1, ..., x(n-1)]
 y: [x1, x2, ..., x(n)]
 xはyの値を参考にして、次の時刻で、yの値をとっている＝yの影響をxが受けている(y->x)
 '''
+
+plt.figure()
+plt.plot(range(20), xseq[:20], c='b', lw=2)
+plt.plot(range(20), yseq[:20], c='r', lw=2)
+plt.show()
+
+
 
 if len(xseq) != len(yseq):
     print('not equal length')
@@ -200,6 +349,25 @@ te_xy = ic.get_TE2(yseq, xseq)
 te_yx = ic.get_TE2(xseq, yseq)
 print('te_x->y: ', te_xy)
 print('te_y->x: ', te_yx)
+
+'''
+print('\n##### TENSORFLOW #####')
+sess = tf.InteractiveSession()
+X = tf.Variable(xseq, dtype=tf.float64)
+Y = tf.Variable(yseq, dtype=tf.float64)
+
+e, p, l = ic.get_TE_for_tf3(X, Y, len(xseq))
+e2, p2, l2 = ic.get_TE_for_tf3(Y, X, len(xseq))
+
+init = tf.global_variables_initializer()
+sess.run(init)
+
+error = sess.run([e])
+error2 = sess.run([e2])
+
+print(error)
+print(error2)
+'''
 
 '''
 print('\n##### DATA #####')

@@ -6,9 +6,11 @@ import my_library as my
 import matplotlib.pyplot as plt
 import math
 
+import time
+
 # my library
 import chaotic_nn_cell
-import info_content as ic
+import info_content
 
 # ベイズ最適化
 import GPy
@@ -32,11 +34,11 @@ is_plot = True
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 10
+seq_len = 100
 
 epoch_size = 1000
 input_units = 2
-inner_units = 10
+inner_units = 100
 output_units = 1
 
 # 中間層層数
@@ -48,14 +50,6 @@ Alpha = 36.552
 
 tau = 20
 
-'''
-Kf = 26.279
-Kr = 84.793
-Alpha = 46.165
-Kf = 0
-Kr = 0
-Alpha = 0
-'''
 
 def make_data(length, loop=0):
     # print('making data...')
@@ -72,10 +66,16 @@ def make_data(length, loop=0):
     sound2 = sound2[loop*length:(loop+1)*length].reshape(length,1)
 
     x1 = np.linspace(start=0, stop=length, num=length).reshape(length,1)
-    y1 = np.sin(x1)
+    y1 = np.sin(2*np.pi*x1/length)
 
     x2 = np.linspace(start=0, stop=length, num=length).reshape(length,1)
-    y2 = np.sin(2*x2)
+    y2 = np.sin(2*2*np.pi*x2/length)
+    
+    '''
+    x1 = np.random.rand(101)*2 - 1
+    x2 = 2*x1[1:] + 0.01*np.random.rand()
+    x1 = x1[:-1]
+    '''
 
     # data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
     data = np.resize(np.transpose([y1, y2]),(length, input_units))
@@ -92,6 +92,7 @@ def make_data(length, loop=0):
     plt.plot(range(length), data[:,1], c='b', lw=1)
     '''
     data = data.astype(np.float64)
+    # print('data: ', data)
     
     return data
 
@@ -151,30 +152,18 @@ def get_lyapunov(seq, dt=1/seq_len):
 
     return lyapunov
 
-def loss(inputs, outputs, Entropy):
-    print('output::{}'.format(outputs))
+def loss(inputs, outputs):
+    print('input::{}'.format(inputs[:,0]))
+    print('output::{}'.format(outputs[:,0]))
 
+    ic = info_content.info_content()
 
     with tf.name_scope('loss_tf'):
         # Transfer Entropyが増加するように誤差関数を設定
-        # Entropy = ic.info_content.get_TE_for_tf( outputs[:,0],inputs[:,0], Entropy, seq_len)
+        entropy, prob = ic.get_TE_for_tf3(inputs[:,0],outputs[:,0], seq_len)
         # Entropy = tf.reduce_mean(tf.log1p(outputs[:,0]))
 
-        '''
-        p = dict()
-        ic = dict()
-
-        for i in range(seq_len):
-            p[outputs[i,0]] = p.get(outputs[i,0], 0) + 1/seq_len
-
-        for (xi, pi) in p.items():
-            ic[xi] = ic.get(-np.log2(pi), 0)
-
-        for (xi, pi) in p.items():
-            Entropy = Entropy + pi*ic.get(xi)
-        '''
-
-    # return -Entropy
+    return -entropy, prob
 
 
     with tf.name_scope('loss_lyapunov'):
@@ -378,13 +367,11 @@ def main(_):
             Wo = tf.Variable(weight(shape=[inner_units, output_units]), name='Wo')
             tf.summary.histogram('Wo', Wo)
 
-        with tf.name_scope('Entropy'):
-            Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
-            tf.summary.scalar('Entropy', Entropy)
 
 
         outputs = inference(inputs, Wi, Wo)
-        error = loss(inputs, outputs, Entropy)
+        # 1st-arg <= 2nd-arg
+        error, p = loss(outputs, inputs)
 
         '''
         with tf.name_scope('lyapunov'):
@@ -401,33 +388,50 @@ def main(_):
             tf.gfile.DeleteRecursively(log_path)
         writer = tf.summary.FileWriter(log_path, sess.graph)
 
-        init_op = tf.global_variables_initializer()
-        sess.run(init_op)
+        data = make_data(seq_len)
+        feed_dict = {inputs:data}
 
         merged = tf.summary.merge_all()
+
+        init_op = tf.global_variables_initializer()
+        sess.run(init_op, feed_dict)
         
         l_list = []
-        data = []
+        # data = []
         for epoch in range(epoch_size):
-            data = make_data(seq_len, loop=epoch)
-            feed_dict = {inputs:data}
 
             # print(sess.run(inputs))
 
-            t = sess.run(train_step, feed_dict=feed_dict)
-            summary, out, error_val= sess.run([merged, outputs, error], feed_dict=feed_dict)
+                       
+            start = time.time()
+            # t = sess.run(train_step, feed_dict)
+            summary, out, error_val, t = sess.run([merged, outputs, error, train_step], feed_dict=feed_dict)
+            end = time.time()
+
+            data1 = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
+            out1 = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
+
+            
+            '''
+            print('data: ', data1)
+            print('out: ', out1)
+            (sum_p, sum_px, sum_pxx, sum_pxy) = prob
+            print('sum_p: ', sum_p)
+            print('sum_px: ', sum_px)
+            print('sum_pxx: ', sum_pxx)
+            print('sum_pxy: ', sum_pxy)
+            '''
 
             if epoch%100 == 0:
-                print('epoch:{}-times'.format(epoch))
+                print('[epoch:{}-times]'.format(epoch))
+                print("elapsed_time: ", int((end-start)*1000), '[msec]')
+                print("error:{}".format(error_val))
 
-                if is_plot:
-                    plt.figure()
-                    data1 = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
-                    out1 = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
+            if is_plot and epoch%(epoch_size-1) == 0:
+                plt.figure()
 
-                    plt.plot(range(seq_len), data1, c='b', lw=1)
-                    plt.plot(range(seq_len), out1, c='r', lw=1)
-                    plt.show()
+                plt.plot(range(seq_len), data1, c='b', lw=1)
+                plt.plot(range(seq_len), out1, c='r', lw=1)
             
             '''
             l_list.append(l[0])
@@ -436,11 +440,11 @@ def main(_):
             '''
 
             # print("output:{}".format(out))
-            print("error:{}".format(error_val))
             # print("lyapunov:{}".format(sess.run(tf.reduce_max(error_val))))
             writer.add_summary(summary, epoch)
 
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
+        plt.show()
 
         if is_save:
             # 特定の変数だけ保存するときに使用
