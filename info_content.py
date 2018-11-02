@@ -219,9 +219,10 @@ class info_content():
         print('x: ', x)
         print('y: ', y)
 
-        with tf.name_scope('Entropy'):
-            Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
-            tf.summary.scalar('Entropy', Entropy)
+        '''
+        Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
+        tf.summary.scalar('Entropy', Entropy)
+        '''
 
         xmax, xmin = tf.reduce_max(x), tf.reduce_min(x)
         ymax, ymin = tf.reduce_max(y), tf.reduce_min(y)
@@ -245,41 +246,27 @@ class info_content():
 
         v = tf.constant([1], dtype=tf.float64)
 
-        p_indices = tf.Variable([[norm_x[1], norm_x[0], norm_y[0]]], dtype=tf.int64)
-        px_indices = tf.Variable([[norm_x[0]]], dtype=tf.int64)
-        pxx_indices = tf.Variable([[norm_x[1], norm_x[0]]], dtype=tf.int64)
-        pxy_indices = tf.Variable([[norm_x[0], norm_y[0]]], dtype=tf.int64)
+        sum_p, sum_px, sum_pxx, sum_pxy = 0, 0, 0, 0
+        for i in range(length-1):
+            p_indices = tf.Variable([[norm_x[i+1], norm_x[i], norm_y[i]]], dtype=tf.int64, trainable=False)
+            px_indices = tf.Variable([[norm_x[i]]], dtype=tf.int64, trainable=False)
+            pxx_indices = tf.Variable([[norm_x[i+1], norm_x[i]]], dtype=tf.int64, trainable=False)
+            pxy_indices = tf.Variable([[norm_x[i], norm_y[i]]], dtype=tf.int64, trainable=False)
 
-        p = tf.SparseTensor(p_indices, v, p_shapes)
-        px = tf.SparseTensor(px_indices, v, px_shapes)
-        pxx = tf.SparseTensor(pxx_indices, v, pxx_shapes)
-        pxy = tf.SparseTensor(pxy_indices, v, pxy_shapes)
+            p = tf.SparseTensor(p_indices, v, p_shapes)
+            px = tf.SparseTensor(px_indices, v, px_shapes)
+            pxx = tf.SparseTensor(pxx_indices, v, pxx_shapes)
+            pxy = tf.SparseTensor(pxy_indices, v, pxy_shapes)
 
-        sum_p = tf.sparse_tensor_to_dense(p, default_value=0)
-        sum_px = tf.sparse_tensor_to_dense(px, default_value=0)
-        sum_pxx = tf.sparse_tensor_to_dense(pxx, default_value=0)
-        sum_pxy = tf.sparse_tensor_to_dense(pxy, default_value=0)
+            p1 = tf.sparse_tensor_to_dense(p, default_value=0)
+            px1 = tf.sparse_tensor_to_dense(px, default_value=0)
+            pxx1 = tf.sparse_tensor_to_dense(pxx, default_value=0)
+            pxy1 = tf.sparse_tensor_to_dense(pxy, default_value=0)
 
-        for i in range(1,length-1):
-            p_indices = tf.Variable([[norm_x[i+1], norm_x[i], norm_y[i]]], dtype=tf.int64)
-            px_indices = tf.Variable([[norm_x[i]]], dtype=tf.int64)
-            pxx_indices = tf.Variable([[norm_x[i+1], norm_x[i]]], dtype=tf.int64)
-            pxy_indices = tf.Variable([[norm_x[i], norm_y[i]]], dtype=tf.int64)
-
-            q = tf.SparseTensor(p_indices, v, p_shapes)
-            qx = tf.SparseTensor(px_indices, v, px_shapes)
-            qxx = tf.SparseTensor(pxx_indices, v, pxx_shapes)
-            qxy = tf.SparseTensor(pxy_indices, v, pxy_shapes)
-
-            q1 = tf.sparse_tensor_to_dense(q, default_value=0)
-            qx1 = tf.sparse_tensor_to_dense(qx, default_value=0)
-            qxx1 = tf.sparse_tensor_to_dense(qxx, default_value=0)
-            qxy1 = tf.sparse_tensor_to_dense(qxy, default_value=0)
-
-            sum_p = sum_p + q1
-            sum_px = sum_px + qx1
-            sum_pxx = sum_pxx + qxx1
-            sum_pxy = sum_pxy + qxy1
+            sum_p = sum_p + p1
+            sum_px = sum_px + px1
+            sum_pxx = sum_pxx + pxx1
+            sum_pxy = sum_pxy + pxy1
             '''
             p = tf.sparse_concat(-1, [p,q])
             px = tf.sparse_concat(-1, [px,qx])
@@ -295,13 +282,14 @@ class info_content():
         '''
 
         l = list(itertools.product(range(Nx), range(Nx), range(Ny)))
+        entropy = 0
         for i,j,k in l:
             prob = (sum_p[i,j,k]/N, sum_px[j]/N, sum_pxx[i,j]/N, sum_pxy[j,k]/N)
-            Entropy = Entropy + tf.cond(tf.equal(sum_p[i,j,k],0), lambda:tf.cast(0, tf.float64), lambda:self.get(prob))
+            entropy = entropy + tf.cond(tf.equal(sum_p[i,j,k],0), lambda:tf.cast(0, tf.float64), lambda:self.get(prob))
         
         pdf = (sum_p, sum_px, sum_pxx, sum_pxy)
 
-        return Entropy, pdf
+        return entropy, pdf
             
 
     def get(self, prob):
@@ -328,10 +316,12 @@ y: [x1, x2, ..., x(n)]
 xはyの値を参考にして、次の時刻で、yの値をとっている＝yの影響をxが受けている(y->x)
 '''
 
+'''
 plt.figure()
 plt.plot(range(20), xseq[:20], c='b', lw=2)
 plt.plot(range(20), yseq[:20], c='r', lw=2)
 plt.show()
+'''
 
 
 
@@ -356,8 +346,8 @@ sess = tf.InteractiveSession()
 X = tf.Variable(xseq, dtype=tf.float64)
 Y = tf.Variable(yseq, dtype=tf.float64)
 
-e, p, l = ic.get_TE_for_tf3(X, Y, len(xseq))
-e2, p2, l2 = ic.get_TE_for_tf3(Y, X, len(xseq))
+e, p = ic.get_TE_for_tf3(X, Y, len(xseq))
+e2, p2 = ic.get_TE_for_tf3(Y, X, len(xseq))
 
 init = tf.global_variables_initializer()
 sess.run(init)

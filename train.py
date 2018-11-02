@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import my_library as my
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import math
 
 import time
@@ -34,12 +35,12 @@ is_plot = True
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 100
+seq_len = 10000
 
 epoch_size = 1000
 input_units = 2
-inner_units = 100
-output_units = 1
+inner_units = 20
+output_units = 2
 
 # 中間層層数
 inner_layers = 1
@@ -48,8 +49,8 @@ Kf = 9.750
 Kr = 16.872
 Alpha = 36.552
 
-tau = 20
-
+tau = int(seq_len/100)
+tau = 1
 
 def make_data(length, loop=0):
     # print('making data...')
@@ -59,23 +60,28 @@ def make_data(length, loop=0):
     sound1 = my.Sound.load_sound('../music/jinglebells.wav')
     sound2 = my.Sound.load_sound('../music/ifudoudou.wav')
 
-    if ((loop+1)*length > len(sound1) or (loop+1)*length > len(sound2)):
-        loop = 0
+    sound1 = sound1[30000:]
+    sound2 = sound2[30000:]
 
-    sound1 = sound1[loop*length:(loop+1)*length].reshape(length,1)
-    sound2 = sound2[loop*length:(loop+1)*length].reshape(length,1)
+    loop1 = loop % int(len(sound1)/length)
+    loop2 = loop % int(len(sound2)/length)
+    # print(loop1*length, len(sound1))
+    # print(loop2*length, len(sound2))
+
+    sound1 = sound1[loop1*length:(loop1+1)*length].reshape(length,1)
+    sound2 = sound2[loop2*length:(loop2+1)*length].reshape(length,1)
 
     x1 = np.linspace(start=0, stop=length, num=length).reshape(length,1)
-    y1 = np.sin(2*np.pi*x1/length)
+    y1 = np.sin(2*np.pi*x1) + 0.1*np.random.rand(length,1)
+    y1 = np.sin(x1)
 
     x2 = np.linspace(start=0, stop=length, num=length).reshape(length,1)
-    y2 = np.sin(2*2*np.pi*x2/length)
-    
-    '''
-    x1 = np.random.rand(101)*2 - 1
-    x2 = 2*x1[1:] + 0.01*np.random.rand()
-    x1 = x1[:-1]
-    '''
+    y2 = np.sin(2*2*np.pi*x2) + 0.1*np.random.rand(length,1)
+    y2 = np.sin(2*x2)    
+
+    # y2 = np.random.rand(length, 1)
+    # y2 = 2*y1[1:] + 0.01*np.random.rand()
+    # y1 = y1[:-1]
 
     # data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
     data = np.resize(np.transpose([y1, y2]),(length, input_units))
@@ -127,8 +133,14 @@ def inference(inputs, Wi, Wo):
     return fo
 
 def get_lyapunov(seq, dt=1/seq_len):
-    '''
     with tf.name_scope('normalization'):
+        seq_max = tf.reduce_max(seq)
+        seq_min = tf.reduce_min(seq)
+
+        seq = (seq-seq_min)/(seq_max-seq_min)
+
+        
+    '''
         moment = tf.nn.moments(seq, [0])
         m = moment[0]
         v = moment[1]
@@ -156,14 +168,18 @@ def loss(inputs, outputs):
     print('input::{}'.format(inputs[:,0]))
     print('output::{}'.format(outputs[:,0]))
 
-    ic = info_content.info_content()
+    '''
 
     with tf.name_scope('loss_tf'):
+        ic = info_content.info_content()
+
         # Transfer Entropyが増加するように誤差関数を設定
         entropy, prob = ic.get_TE_for_tf3(inputs[:,0],outputs[:,0], seq_len)
+        tf.summary.scalar('Entropy', entropy)
         # Entropy = tf.reduce_mean(tf.log1p(outputs[:,0]))
 
     return -entropy, prob
+    '''
 
 
     with tf.name_scope('loss_lyapunov'):
@@ -172,11 +188,11 @@ def loss(inputs, outputs):
         loss = []
         for i in range(output_units):
             lyapunov.append(get_lyapunov(outputs[:,i]))
-            # loss.append(1/(1+tf.exp(lyapunov[i])))
+            loss.append(1/(1+tf.exp(lyapunov[i])))
             # loss.append(tf.exp(-lyapunov[i]))
-            loss.append(-lyapunov[i])
-
-        return tf.reduce_max(lyapunov)
+            # loss.append(-lyapunov[i])
+        print(loss)
+        print(lyapunov)
 
         # リアプノフ指数を取得(評価の際は最大リアプノフ指数をとる)
         # return tf.reduce_sum(loss), lyapunov
@@ -185,13 +201,15 @@ def loss(inputs, outputs):
         # return loss, lyapunov
 
 
-def train(error):
+def train(error, update_params):
     # return tf.train.GradientDescentOptimizer(learning_rate=0.001).minimize(error)
     with tf.name_scope('training'):
-        training = tf.train.AdamOptimizer().minimize(error)
+        opt = tf.train.AdamOptimizer()
+
+        # training = opt.minimize(error, var_list=update_params)
+        training = opt.minimize(error)
 
     return training
-
 
 
 def predict():
@@ -370,47 +388,42 @@ def main(_):
 
 
         outputs = inference(inputs, Wi, Wo)
-        # 1st-arg <= 2nd-arg
-        error, p = loss(outputs, inputs)
 
-        '''
+        # 1st-arg <= 2nd-arg
+        error, lyapunov = loss(inputs, outputs)
+        tf.summary.scalar('error', error)
+        train_step = train(error, [Wo])
+
         with tf.name_scope('lyapunov'):
             for i in range(output_units):
                 tf.summary.scalar('lyapunov'+str(i), lyapunov[i])
-        '''
-
-        tf.summary.scalar('error', error)
-        train_step = train(error)
-
 
         # Tensorboard logfile
         if tf.gfile.Exists(log_path):
             tf.gfile.DeleteRecursively(log_path)
         writer = tf.summary.FileWriter(log_path, sess.graph)
 
-        data = make_data(seq_len)
-        feed_dict = {inputs:data}
+        init_op = tf.global_variables_initializer()
+        sess.run(init_op)
 
         merged = tf.summary.merge_all()
 
-        init_op = tf.global_variables_initializer()
-        sess.run(init_op, feed_dict)
         
         l_list = []
         # data = []
         for epoch in range(epoch_size):
+            data = make_data(seq_len, loop=epoch)
+            feed_dict = {inputs:data}
 
-            # print(sess.run(inputs))
-
-                       
             start = time.time()
             # t = sess.run(train_step, feed_dict)
-            summary, out, error_val, t = sess.run([merged, outputs, error, train_step], feed_dict=feed_dict)
+            summary, out, error_val, l, t = sess.run([merged, outputs, error, lyapunov, train_step], feed_dict=feed_dict)
             end = time.time()
+
+            l_list.append(l[0])
 
             data1 = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
             out1 = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
-
             
             '''
             print('data: ', data1)
@@ -423,28 +436,42 @@ def main(_):
             '''
 
             if epoch%100 == 0:
-                print('[epoch:{}-times]'.format(epoch))
+                print('\n[epoch:{}-times]'.format(epoch))
                 print("elapsed_time: ", int((end-start)*1000), '[msec]')
                 print("error:{}".format(error_val))
 
             if is_plot and epoch%(epoch_size-1) == 0:
-                plt.figure()
 
-                plt.plot(range(seq_len), data1, c='b', lw=1)
-                plt.plot(range(seq_len), out1, c='r', lw=1)
+                data2 = data1[int(seq_len/2):int(seq_len/2)+100]
+                out2 = out1[int(seq_len/2):int(seq_len/2)+100]
+
+                data2 = (data2-min(data2))/(max(data2)-min(data2))
+                out2 = (out2-min(out2))/(max(out2)-min(out2))
+
+                plt.figure()
+                plt.title('time-data-graph(epoch:{})'.format(epoch))
+                plt.plot(range(100), data2, c='b', lw=1)
+                plt.plot(range(100), out2, c='r', lw=1)
+
+                plt.figure()
+                plt.title('delayed-data-graph(epoch:{})'.format(epoch))
+                plt.plot(data1[:-tau], data1[tau:], c='r', lw=0.1)
+
+                fig = plt.figure()
+                plt.title('delayed-out-graph(epoch:{})'.format(epoch))
+                plt.plot(out1[:-tau], out1[tau:], c='r', lw=0.1)
+                '''
+                ax = fig.add_subplot(111,projection='3d')
+                ax.set_title('delayed-out-graph(epoch:{})'.format(epoch))
+                ax.scatter3D(out1[:-2*tau],out1[tau:-tau],out1[2*tau:])
+                '''
             
-            '''
-            l_list.append(l[0])
-            if epoch%10 == 0:
-                print('lapunov: ', l)
-            '''
 
             # print("output:{}".format(out))
             # print("lyapunov:{}".format(sess.run(tf.reduce_max(error_val))))
             writer.add_summary(summary, epoch)
 
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
-        plt.show()
 
         if is_save:
             # 特定の変数だけ保存するときに使用
@@ -470,9 +497,17 @@ def main(_):
 
             plt.figure()
             plt.scatter(range(seq_len), out[:,1], c='r', s=1)
-            plt.figure()
-            plt.plot(out[:,0], out[:,1], c='r', lw=1)
             '''
+            random = np.random.rand(seq_len,1)
+
+            plt.figure()
+            plt.title('time-random-graph(epoch:{})'.format(epoch))
+            plt.plot(range(100), random[int(seq_len/2):int(seq_len/2+100)], c='b', lw=1)
+
+            plt.figure()
+            plt.title('delayed-random-graph(epoch:{})'.format(epoch))
+            plt.plot(random[:-tau], random[tau:], c='r', lw=0.1)
+            plt.show()
 
         sess.close()
 
