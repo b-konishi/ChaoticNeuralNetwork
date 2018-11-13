@@ -38,7 +38,7 @@ is_plot = False
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 20
+seq_len = 5
 
 epoch_size = 1
 input_units = 2
@@ -441,9 +441,13 @@ def main(_):
             tf.gfile.DeleteRecursively(log_path)
         writer = tf.summary.FileWriter(log_path, sess.graph)
 
+
+        run_options = tf.RunOptions(output_partition_graphs=True)
+        run_metadata = tf.RunMetadata()
+        
+
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
-
         merged = tf.summary.merge_all()
 
         
@@ -455,7 +459,8 @@ def main(_):
 
             start = time.time()
             # t = sess.run(train_step, feed_dict)
-            summary, out, error_val, l, d, t = sess.run([merged, outputs, error, lyapunov, dmo, train_step], feed_dict)
+            summary, out, error_val, l, d, t = sess.run([merged, outputs, error, lyapunov, dmo, train_step], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+            # sess.run([ops], run_metadata=run_metadata, options=run_options)
             end = time.time()
 
             l_list.append(l[0])
@@ -507,6 +512,12 @@ def main(_):
 
             # print("output:{}".format(out))
             # print("lyapunov:{}".format(sess.run(tf.reduce_max(error_val))))
+
+            '''
+            graph = run_metadata.partition_graphs[0]
+            writer = tf.summary.FileWriter(logdir=log_path, graph=graph)
+            writer.flush()
+            '''
             writer.add_summary(summary, epoch)
 
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
