@@ -4,6 +4,9 @@ import numpy as np
 import itertools
 
 import tensorflow as tf
+import tensorflow_probability as tfp
+tfd = tfp.distributions
+
 import matplotlib.pyplot as plt
 
 class info_content():
@@ -136,6 +139,7 @@ class info_content():
 
         return te
 
+    '''
 
     def get_TE_for_tf(x, y, TE, length):
         print('\n##### TRANSFER ENTROPY FOR TENSORFLOW #####')
@@ -192,11 +196,9 @@ class info_content():
         px1 = tf.bincount(norm_x[:-1])
 
         for i in range(length-1):
-            '''
-            norm_x1 = tf.cast(Nx * (x[i+1]-xmin)/(xmax-xmin), tf.int64)
-            norm_x = tf.cast(Nx * (x[i]-xmin)/(xmax-xmin), tf.int64)
-            norm_y = tf.cast(Ny * (y[i]-ymin)/(ymax-ymin), tf.int64)
-            '''
+            # norm_x1 = tf.cast(Nx * (x[i+1]-xmin)/(xmax-xmin), tf.int64)
+            # norm_x = tf.cast(Nx * (x[i]-xmin)/(xmax-xmin), tf.int64)
+            # norm_y = tf.cast(Ny * (y[i]-ymin)/(ymax-ymin), tf.int64)
 
             p[norm_x[i+1], norm_x[i], norm_y[i]].assign(p[norm_x[i+1], norm_x[i], norm_y[i]] + 1/N)
             px[norm_x[i]].assign(px[norm_x[i]] + 1/N)
@@ -219,10 +221,8 @@ class info_content():
         print('x: ', x)
         print('y: ', y)
 
-        '''
-        Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
-        tf.summary.scalar('Entropy', Entropy)
-        '''
+        # Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
+        # tf.summary.scalar('Entropy', Entropy)
 
         xmax, xmin = tf.reduce_max(x), tf.reduce_min(x)
         ymax, ymin = tf.reduce_max(y), tf.reduce_min(y)
@@ -267,19 +267,6 @@ class info_content():
             sum_px = sum_px + px1
             sum_pxx = sum_pxx + pxx1
             sum_pxy = sum_pxy + pxy1
-            '''
-            p = tf.sparse_concat(-1, [p,q])
-            px = tf.sparse_concat(-1, [px,qx])
-            pxx = tf.sparse_concat(-1, [pxx,qxx])
-            pxy = tf.sparse_concat(-1, [pxy,qxy])
-            '''
-
-        '''
-        p1 = tf.sparse_tensor_to_dense(p, default_value=0)
-        px1 = tf.sparse_tensor_to_dense(px, default_value=0)
-        pxx1 = tf.sparse_tensor_to_dense(pxx, default_value=0)
-        pxy1 = tf.sparse_tensor_to_dense(pxy, default_value=0)
-        '''
 
         l = list(itertools.product(range(Nx), range(Nx), range(Ny)))
         entropy = 0
@@ -290,14 +277,114 @@ class info_content():
         pdf = (sum_p, sum_px, sum_pxx, sum_pxy)
 
         return entropy, pdf
-            
+    '''
+
+    def get_TE_for_tf4(self, x, y, length):
+        print('\n##### TRANSFER ENTROPY FOR TENSORFLOW #####')
+        print('x: ', x)
+        print('y: ', y)
+
+        '''
+        Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
+        tf.summary.scalar('Entropy', Entropy)
+        '''
+
+        x = x[:,0]
+        y = y[:,0]
+
+        n = length-1
+        N = int(np.log2(n) + 1)
+
+        print('n: ', n)
+        print('bin: ', N)
+
+        xmax, xmin = tf.reduce_max(x), tf.reduce_min(x)
+        ymax, ymin = tf.reduce_max(y), tf.reduce_min(y)
+
+        norm_x = tf.cast((x-xmin)/(xmax-xmin), tf.float32)
+        norm_y = tf.cast((y-ymin)/(ymax-ymin), tf.float32)
+
+        dist, dist_x, dist_xx, dist_xy = [], [], [], []
+        for i in range(n):
+            d = tfd.MultivariateNormalDiag(
+                    loc=[norm_x[i+1], norm_x[i], norm_y[i]],
+                    scale_diag = [1]*3
+                    )
+            dist.append(d)
+
+            dx = tfd.Normal(loc=norm_x[i], scale=0.1)
+            dist_x.append(dx)
+
+            dxx = tfd.MultivariateNormalDiag(
+                    loc=[norm_x[i+1], norm_x[i]],
+                    scale_diag = [1]*2
+                    )
+            dist_xx.append(dxx)
+
+            dxy = tfd.MultivariateNormalDiag(
+                    loc=[norm_x[i], norm_y[i]],
+                    scale_diag = [1]*2
+                    )
+            dist_xy.append(dxy)
+
+
+        dm = tfd.Mixture(cat=tfd.Categorical([1/n]*n), components=dist)
+        dmx = tfd.Mixture(cat=tfd.Categorical([1/n]*n), components=dist_x)
+        dmxx = tfd.Mixture(cat=tfd.Categorical([1/n]*n), components=dist_xx)
+        dmxy = tfd.Mixture(cat=tfd.Categorical([1/n]*n), components=dist_xy)
+
+        '''
+        xx = tf.linspace(-1.,1.,21)
+        s = tf.reduce_sum(dmx.prob(xx))
+        return -entropy, dmx
+        '''
+        l = list(itertools.product(range(N), range(N), range(N)))
+        entropy = 0
+        for i,j,k in l:
+            print('i:{}, j:{}, k:{}'.format(i,j,k))
+            '''
+            prob = (dm.prob([i,j,k]), dmx.prob([j]), dmxx.prob([i,j]), dmxy.prob([j,k]))
+            (p, px, pxx, pxy) = prob
+            '''
+            entropy += dm.prob([i,j,k])*(tf.log1p((dm.prob([i,j,k])*dmx.prob([j]))/(dmxy.prob([j,k])*dmxx.prob([i,j]))))
+        
+        # pdf = (dm, dmx, dmxx, dmxy)
+
+        entropy = tf.reduce_sum(entropy)
+        return entropy, dmx
+
 
     def get(self, prob):
         (p, px, pxx, pxy) = prob
-        a = tf.cast(p * px, dtype=tf.float64)
-        b = tf.cast(pxy * pxx, dtype=tf.float64)
-        return p*(tf.log(a/b)/tf.cast(2.0, dtype=tf.float64))
+        a = tf.cast(p * px, dtype=tf.float32)
+        b = tf.cast(pxy * pxx, dtype=tf.float32)
+        return p*(tf.log(a/b)/tf.cast(2.0, dtype=tf.float32))
 
+
+    '''
+
+    def get_TE_for_tf5(self, x, y, length):
+
+        omax, omin = tf.reduce_max(x[:,0]), tf.reduce_min(x[:,0])
+        imax, imin = tf.reduce_max(y[:,0]), tf.reduce_min(y[:,0])
+
+        o_norm = (x[:,0]-omin)/(omax-omin)
+        i_norm = (y[:,0]-imin)/(imax-imin)
+
+        dist, dist_x, dist_xx, dist_xy = [], [], [], []
+        for i in range(length):
+            dx = tfd.Normal(loc=o_norm[i], scale=0.1)
+            dist_x.append(dx)
+
+        dmx = tfd.Mixture(cat=tfd.Categorical(tf.zeros(length)+(1/length)), components=dist_x)
+        
+        xx = tf.linspace(-1.,1.,21)
+        # x = tf.cast(x, tf.float32)
+        s = tf.reduce_sum(dmx.prob([xx]))
+
+        return -s, dmx
+        
+    '''
 
 
 

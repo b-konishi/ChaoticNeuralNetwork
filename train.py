@@ -6,6 +6,8 @@ import my_library as my
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import math
+import tensorflow_probability as tfp
+tfd = tfp.distributions
 
 import time
 
@@ -16,6 +18,7 @@ import info_content
 # ベイズ最適化
 import GPy
 import GPyOpt
+
 
 model_path = '../model/'
 log_path = '../logdir'
@@ -29,17 +32,17 @@ is_save = False
 is_save = True
 
 # グラフ描画
-is_plot = False
 is_plot = True
+is_plot = False
 
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 10000
+seq_len = 20
 
-epoch_size = 1000
+epoch_size = 1
 input_units = 2
-inner_units = 20
+inner_units = 4
 output_units = 2
 
 # 中間層層数
@@ -97,13 +100,13 @@ def make_data(length, loop=0):
     plt.figure()
     plt.plot(range(length), data[:,1], c='b', lw=1)
     '''
-    data = data.astype(np.float64)
+    data = data.astype(np.float32)
     # print('data: ', data)
     
     return data
 
 def weight(shape = []):
-    initial = tf.truncated_normal(shape, stddev = 0.01, dtype=tf.float64)
+    initial = tf.truncated_normal(shape, stddev = 0.01, dtype=tf.float32)
     # return tf.Variable(initial)
     return initial
 
@@ -113,7 +116,7 @@ def set_innerlayers(inputs, layers_size):
     for i in range(layers_size):
         with tf.name_scope('Layer' + str(i+2)):
             cell = chaotic_nn_cell.ChaoticNNCell(num_units=inner_units, Kf=Kf, Kr=Kr, alpha=Alpha, activation=activation)
-            outputs, state = tf.nn.static_rnn(cell=cell, inputs=[inner_output], dtype=tf.float64)
+            outputs, state = tf.nn.static_rnn(cell=cell, inputs=[inner_output], dtype=tf.float32)
             inner_output = outputs[-1]
 
     return inner_output
@@ -159,17 +162,18 @@ def get_lyapunov(seq, dt=1/seq_len):
     となるため、プログラム上のリアプノフ指数の定義は、
     mean(log(1+f')-log(2))とする（0以上ならばカオス性を持つという性質は変わらない）
     '''
-    lyapunov = tf.reduce_mean(tf.log1p(diff/dt)-tf.log(tf.cast(2.0, tf.float64)))
+    lyapunov = tf.reduce_mean(tf.log1p(diff/dt)-tf.log(tf.cast(2.0, tf.float32)))
     # lyapunov = tf.reduce_mean(tf.log1p(diff))
 
     return lyapunov
 
-def loss(inputs, outputs):
+
+def loss(inputs, outputs, length):
     print('input::{}'.format(inputs[:,0]))
     print('output::{}'.format(outputs[:,0]))
+    lyapunov = tf.zeros([output_units])
 
     '''
-
     with tf.name_scope('loss_tf'):
         ic = info_content.info_content()
 
@@ -180,6 +184,36 @@ def loss(inputs, outputs):
 
     return -entropy, prob
     '''
+
+    ic = info_content.info_content()
+    entropy, dmx = ic.get_TE_for_tf4(outputs, inputs, seq_len)
+    print('entropy_shape: ', entropy)
+
+    '''
+    omax, omin = tf.reduce_max(outputs[:,0]), tf.reduce_min(outputs[:,0])
+    imax, imin = tf.reduce_max(inputs[:,0]), tf.reduce_min(inputs[:,0])
+
+    norm_x = (outputs[:,0]-omin)/(omax-omin)
+    norm_y = (inputs[:,0]-imin)/(imax-imin)
+
+    dist, dist_x, dist_xx, dist_xy = [], [], [], []
+    for i in range(length):
+        dx = tfd.Normal(loc=norm_x[i]+norm_y[i], scale=0.1)
+        dist_x.append(dx)
+
+        
+    dmx = tfd.Mixture(cat=tfd.Categorical(tf.zeros(length)+(1/length)), components=dist_x)
+
+    
+    x = tf.linspace(-1.,1.,21)
+    # x = tf.cast(x, tf.float32)
+    entropy = tf.reduce_sum(dmx.prob([x]))
+    '''
+
+
+    return entropy, lyapunov, dmx
+    
+    
 
 
     with tf.name_scope('loss_lyapunov'):
@@ -206,8 +240,8 @@ def train(error, update_params):
     with tf.name_scope('training'):
         opt = tf.train.AdamOptimizer()
 
-        # training = opt.minimize(error, var_list=update_params)
-        training = opt.minimize(error)
+        training = opt.minimize(error, var_list=update_params)
+        # training = opt.minimize(error)
 
     return training
 
@@ -234,7 +268,7 @@ def predict():
     print('predict')
 
     data = make_data(pseq_len, loop=1)*100000
-    inputs = tf.placeholder(dtype = tf.float64, shape = [None, input_units], name='inputs')
+    inputs = tf.placeholder(dtype = tf.float32, shape = [None, input_units], name='inputs')
 
     feed_dict={inputs:data}
     # inputs = make_data(pseq_len)
@@ -376,7 +410,7 @@ def main(_):
         sess = tf.InteractiveSession()
 
         with tf.name_scope('data'):
-            inputs = tf.placeholder(dtype = tf.float64, shape = [seq_len, input_units], name='inputs')
+            inputs = tf.placeholder(dtype = tf.float32, shape = [seq_len, input_units], name='inputs')
         with tf.name_scope('Wi'):
             Wi = tf.Variable(weight(shape=[input_units, inner_units]), name='Wi')
             tf.summary.histogram('Wi', Wi)
@@ -390,7 +424,11 @@ def main(_):
         outputs = inference(inputs, Wi, Wo)
 
         # 1st-arg <= 2nd-arg
-        error, lyapunov = loss(inputs, outputs)
+        error, lyapunov, dmo = loss(inputs, outputs, seq_len)
+
+        x = tf.linspace(-1.,1.,1000)
+        dmo = dmo.prob(x)
+
         tf.summary.scalar('error', error)
         train_step = train(error, [Wo])
 
@@ -417,7 +455,7 @@ def main(_):
 
             start = time.time()
             # t = sess.run(train_step, feed_dict)
-            summary, out, error_val, l, t = sess.run([merged, outputs, error, lyapunov, train_step], feed_dict=feed_dict)
+            summary, out, error_val, l, d, t = sess.run([merged, outputs, error, lyapunov, dmo, train_step], feed_dict)
             end = time.time()
 
             l_list.append(l[0])
@@ -435,7 +473,7 @@ def main(_):
             print('sum_pxy: ', sum_pxy)
             '''
 
-            if epoch%100 == 0:
+            if epoch%1 == 0:
                 print('\n[epoch:{}-times]'.format(epoch))
                 print("elapsed_time: ", int((end-start)*1000), '[msec]')
                 print("error:{}".format(error_val))
@@ -472,6 +510,11 @@ def main(_):
             writer.add_summary(summary, epoch)
 
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
+
+        # 多峰分布ができているか確認
+        plt.figure()
+        plt.plot(np.linspace(-1.,1.,1000), d)
+        plt.show()
 
         if is_save:
             # 特定の変数だけ保存するときに使用
