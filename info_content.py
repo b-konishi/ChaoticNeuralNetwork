@@ -288,109 +288,67 @@ class info_content():
         Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
         tf.summary.scalar('Entropy', Entropy)
         '''
-
-        x = x[:,0]
-        y = y[:,0]
-
         n = length-1
         N = int(np.log2(n) + 1)
 
         print('n: ', n)
         print('bin: ', N)
 
+        '''
         xmax, xmin = tf.reduce_max(x), tf.reduce_min(x)
         ymax, ymin = tf.reduce_max(y), tf.reduce_min(y)
 
         norm_x = tf.cast((x-xmin)/(xmax-xmin), tf.float32)
         norm_y = tf.cast((y-ymin)/(ymax-ymin), tf.float32)
-
-        '''
-        dist, dist_x, dist_xx, dist_xy = [], [], [], []
-        for i in range(n):
-            d = tfd.MultivariateNormalDiag(
-                    loc=[norm_x[i+1], norm_x[i], norm_y[i]],
-                    scale_diag = [1]*3
-                    )
-            dist.append(d)
-
-            dx = tfd.Normal(loc=norm_x[i], scale=0.1)
-            dist_x.append(dx)
-
-            dxx = tfd.MultivariateNormalDiag(
-                    loc=[norm_x[i+1], norm_x[i]],
-                    scale_diag = [1]*2
-                    )
-            dist_xx.append(dxx)
-
-            dxy = tfd.MultivariateNormalDiag(
-                    loc=[norm_x[i], norm_y[i]],
-                    scale_diag = [1]*2
-                    )
-            dist_xy.append(dxy)
-
-
-        dm = tfd.Mixture(cat=tfd.Categorical([1/n]*n), components=dist)
-        dmx = tfd.Mixture(cat=tfd.Categorical([1/n]*n), components=dist_x)
-        dmxx = tfd.Mixture(cat=tfd.Categorical([1/n]*n), components=dist_xx)
-        dmxy = tfd.Mixture(cat=tfd.Categorical([1/n]*n), components=dist_xy)
         '''
 
-        dm = tfd.MixtureSameFamily(
-                mixture_distribution=tfd.Categorical(probs=[1/3]*3),
-                components_distribution=tfd.MultivariateNormalDiag(
-                    loc=[[norm_x[1:], norm_x[:-1], norm_y[:-1]]],
-                    scale_diag=[[.1]*n,[.1]*n,[.1]*n])
-                )
+        scale = 1.0
+
+        dm = tfd.Independent(
+                tfd.MixtureSameFamily(
+                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
+                    components_distribution=tfd.MultivariateNormalDiag(
+                        loc=tf.transpose([x[1:], x[:-1], y[:-1]]),
+                        scale_diag=[[scale]*3])),
+                reinterpreted_batch_ndims=0)
 
         dmx = tfd.MixtureSameFamily(
                 mixture_distribution=tfd.Categorical(probs=[1/n]*n),
-                components_distribution=tfd.Normal(loc=norm_x[:-1], scale=[0.1]*n)
+                components_distribution=tfd.Normal(loc=x[:-1], scale=scale)
                 )
 
-        dmxx = tfd.MixtureSameFamily(
-                mixture_distribution=tfd.Categorical(probs=[1/2]*2),
-                components_distribution=tfd.MultivariateNormalDiag(
-                    loc=[norm_x[1:], norm_x[:-1]],
-                    scale_diag=[[.1]*n,[.1]*n])
-                )
+        dmxx = tfd.Independent(
+                tfd.MixtureSameFamily(
+                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
+                    components_distribution=tfd.MultivariateNormalDiag(
+                        loc=tf.transpose([x[1:],x[:-1]]),
+                        scale_diag=[scale]*2)),
+                reinterpreted_batch_ndims=0)
 
-        dmxy = tfd.MixtureSameFamily(
-                mixture_distribution=tfd.Categorical(probs=[1/2]*2),
-                components_distribution=tfd.MultivariateNormalDiag(
-                    loc=[norm_x[:-1], norm_y[:-1]],
-                    scale_diag=[[.1]*n,[.1]*n])
-                )
+        dmxy = tfd.Independent(
+                tfd.MixtureSameFamily(
+                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
+                    components_distribution=tfd.MultivariateNormalDiag(
+                        loc=tf.transpose([x[:-1],y[:-1]]),
+                        scale_diag=[scale]*2)),
+                reinterpreted_batch_ndims=0)
 
-        '''
-        xx = tf.linspace(-1.,1.,21)
-        s = tf.reduce_sum(dmx.prob(xx))
-        return -entropy, dmx
-        '''
-        l = list(itertools.product(range(N), range(N), range(N)))
+        pdf = dmx
+
+        nn = np.random.rand(N)
+        l = list(itertools.product(nn, nn, nn))
         entropy = 0
         for i,j,k in l:
             print('i:{}, j:{}, k:{}'.format(i,j,k))
-            '''
-            prob = (dm.prob([i,j,k]), dmx.prob([j]), dmxx.prob([i,j]), dmxy.prob([j,k]))
-            (p, px, pxx, pxy) = prob
-            '''
-            a = (dm.prob([i,j,k])*dmx.prob([j]))
-            b = (dmxy.prob([j,k])*dmxx.prob([i,j]))
-            entropy += dm.prob([i,j,k])*tf.log1p(a/b)
+            a = dm.prob([i,j,k]) * dmx.prob([j])
+            b = dmxy.prob([j,k]) * dmxx.prob([i,j])
+            y = dm.prob([i,j,k]) * tf.log1p(a/b)
+            y = tf.reshape(y, [])
+            entropy = entropy + y
         
-        # pdf = (dm, dmx, dmxx, dmxy)
+        print('complete reading')
 
-        entropy = tf.reduce_sum(entropy)
-        return entropy, dmx
-
-
-    def meshgrid(x, y=x):
-        [gx, gy] = np.meshgrid(x, y, indexing='ij')
-        gx, gy = np.float32(gx), np.float32(gy)
-        grid = np.concatenate([gx.ravel()[None, :], gy.ravel()[None, :]], axis=0)
-        return grid.T.reshape(x.size, y.size, 2)
-
-
+        return -entropy, pdf
 
     def get(self, prob):
         (p, px, pxx, pxy) = prob

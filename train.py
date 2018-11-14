@@ -1,23 +1,29 @@
 # -*- coding: utf-8 -*-
 
-import tensorflow as tf
-import numpy as np
-import my_library as my
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import math
-import tensorflow_probability as tfp
-tfd = tfp.distributions
-
-import time
-
 # my library
+import my_library as my
 import chaotic_nn_cell
 import info_content
 
-# ベイズ最適化
+# Standard
+import math
+import time
+import numpy as np
+
+# Tensorflow
+import tensorflow as tf
+from tensorflow.python import debug as tf_debug
+import tensorflow_probability as tfp
+tfd = tfp.distributions
+
+# Drawing Graph
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# Baysian Optimization
 import GPy
 import GPyOpt
+
 
 
 model_path = '../model/'
@@ -32,17 +38,17 @@ is_save = False
 is_save = True
 
 # グラフ描画
-is_plot = True
 is_plot = False
+is_plot = True
 
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 5
+seq_len = 100
 
-epoch_size = 1
+epoch_size = 1000
 input_units = 2
-inner_units = 4
+inner_units = 10
 output_units = 2
 
 # 中間層層数
@@ -129,7 +135,7 @@ def inference(inputs, Wi, Wo):
 
     inner_output = set_innerlayers(sigm, inner_layers)
 
-    with tf.name_scope('Layer4'):
+    with tf.name_scope('Layer' + str(inner_layers+2)):
         fo = tf.matmul(inner_output, Wo)
         # tf.summary.histogram('fo', fo)
 
@@ -174,7 +180,6 @@ def loss(inputs, outputs, length):
     lyapunov = tf.zeros([output_units])
 
     '''
-    with tf.name_scope('loss_tf'):
         ic = info_content.info_content()
 
         # Transfer Entropyが増加するように誤差関数を設定
@@ -184,37 +189,16 @@ def loss(inputs, outputs, length):
 
     return -entropy, prob
     '''
+    with tf.name_scope('loss_tf'):
+        x = (outputs[:,0]-tf.reduce_min(outputs[:,0]))/(tf.reduce_max(outputs[:,0])-tf.reduce_min(outputs[:,0]))
+        y = (inputs[:,0]-tf.reduce_min(inputs[:,0]))/(tf.reduce_max(inputs[:,0])-tf.reduce_min(inputs[:,0]))
 
-    ic = info_content.info_content()
-    entropy, dmx = ic.get_TE_for_tf4(outputs, inputs, seq_len)
-    print('entropy_shape: ', entropy)
+        ic = info_content.info_content()
+        entropy, pdf = ic.get_TE_for_tf4(x,y, seq_len)
+        print('entropy_shape: ', entropy)
 
-    '''
-    omax, omin = tf.reduce_max(outputs[:,0]), tf.reduce_min(outputs[:,0])
-    imax, imin = tf.reduce_max(inputs[:,0]), tf.reduce_min(inputs[:,0])
-
-    norm_x = (outputs[:,0]-omin)/(omax-omin)
-    norm_y = (inputs[:,0]-imin)/(imax-imin)
-
-    dist, dist_x, dist_xx, dist_xy = [], [], [], []
-    for i in range(length):
-        dx = tfd.Normal(loc=norm_x[i]+norm_y[i], scale=0.1)
-        dist_x.append(dx)
-
-        
-    dmx = tfd.Mixture(cat=tfd.Categorical(tf.zeros(length)+(1/length)), components=dist_x)
-
+    return entropy, lyapunov, pdf
     
-    x = tf.linspace(-1.,1.,21)
-    # x = tf.cast(x, tf.float32)
-    entropy = tf.reduce_sum(dmx.prob([x]))
-    '''
-
-
-    return entropy, lyapunov, dmx
-    
-    
-
 
     with tf.name_scope('loss_lyapunov'):
         # リアプノフ指数が増加するように誤差関数を設定
@@ -402,6 +386,11 @@ def opt(x):
 
     return osess.run(error)
 
+def set_debugger_session():
+    sess = K.get_session()
+    sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+    K.set_session(sess)
+
 
 def main(_):
 
@@ -424,13 +413,16 @@ def main(_):
         outputs = inference(inputs, Wi, Wo)
 
         # 1st-arg <= 2nd-arg
-        error, lyapunov, dmo = loss(inputs, outputs, seq_len)
+        error, lyapunov, pdf = loss(inputs, outputs, seq_len)
+        '''
+        dmx = pdf
 
         x = tf.linspace(-1.,1.,1000)
-        dmo = dmo.prob(x)
+        dmo = dmx.prob(x)
+        '''
 
         tf.summary.scalar('error', error)
-        train_step = train(error, [Wo])
+        train_step = train(error, [Wi, Wo])
 
         with tf.name_scope('lyapunov'):
             for i in range(output_units):
@@ -448,6 +440,9 @@ def main(_):
 
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
+
+        # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+
         merged = tf.summary.merge_all()
 
         
@@ -459,43 +454,38 @@ def main(_):
 
             start = time.time()
             # t = sess.run(train_step, feed_dict)
-            summary, out, error_val, l, d, t = sess.run([merged, outputs, error, lyapunov, dmo, train_step], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+            summary, out, error_val, l, t = sess.run([merged, outputs, error, lyapunov, train_step], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
             # sess.run([ops], run_metadata=run_metadata, options=run_options)
             end = time.time()
 
             l_list.append(l[0])
 
+            '''
             data1 = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
             out1 = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
+            '''
             
-            '''
-            print('data: ', data1)
-            print('out: ', out1)
-            (sum_p, sum_px, sum_pxx, sum_pxy) = prob
-            print('sum_p: ', sum_p)
-            print('sum_px: ', sum_px)
-            print('sum_pxx: ', sum_pxx)
-            print('sum_pxy: ', sum_pxy)
-            '''
-
             if epoch%1 == 0:
                 print('\n[epoch:{}-times]'.format(epoch))
-                print("elapsed_time: ", int((end-start)*1000), '[msec]')
+                print("elapsed_time: ", int((end-start)*1000), '[sec]')
                 print("error:{}".format(error_val))
 
             if is_plot and epoch%(epoch_size-1) == 0:
 
+                '''
                 data2 = data1[int(seq_len/2):int(seq_len/2)+100]
                 out2 = out1[int(seq_len/2):int(seq_len/2)+100]
+                '''
 
-                data2 = (data2-min(data2))/(max(data2)-min(data2))
-                out2 = (out2-min(out2))/(max(out2)-min(out2))
+                data2 = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
+                out2 = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
 
                 plt.figure()
                 plt.title('time-data-graph(epoch:{})'.format(epoch))
-                plt.plot(range(100), data2, c='b', lw=1)
-                plt.plot(range(100), out2, c='r', lw=1)
+                plt.plot(range(len(data2)), data2, c='b', lw=1)
+                plt.plot(range(len(out2)), out2, c='r', lw=1)
 
+                '''
                 plt.figure()
                 plt.title('delayed-data-graph(epoch:{})'.format(epoch))
                 plt.plot(data1[:-tau], data1[tau:], c='r', lw=0.1)
@@ -503,7 +493,7 @@ def main(_):
                 fig = plt.figure()
                 plt.title('delayed-out-graph(epoch:{})'.format(epoch))
                 plt.plot(out1[:-tau], out1[tau:], c='r', lw=0.1)
-                '''
+
                 ax = fig.add_subplot(111,projection='3d')
                 ax.set_title('delayed-out-graph(epoch:{})'.format(epoch))
                 ax.scatter3D(out1[:-2*tau],out1[tau:-tau],out1[2*tau:])
@@ -522,14 +512,18 @@ def main(_):
 
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
 
-        # 多峰分布ができているか確認
+        # 混合ベイズ分布ができているか確認
+        '''
         plt.figure()
         plt.plot(np.linspace(-1.,1.,1000), d)
+        '''
         plt.show()
 
         if is_save:
+            '''
             # 特定の変数だけ保存するときに使用
-            # train_vars = tf.trainable_variables()
+            train_vars = tf.trainable_variables()
+            '''
             saver = tf.train.Saver()
             saver.save(sess, model_path + 'model.ckpt')
 
@@ -541,6 +535,7 @@ def main(_):
         out = np.array(out)
 
         if is_plot:
+            pass
             '''
             plt.figure()
             data = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
@@ -551,7 +546,6 @@ def main(_):
 
             plt.figure()
             plt.scatter(range(seq_len), out[:,1], c='r', s=1)
-            '''
             random = np.random.rand(seq_len,1)
 
             plt.figure()
@@ -562,6 +556,7 @@ def main(_):
             plt.title('delayed-random-graph(epoch:{})'.format(epoch))
             plt.plot(random[:-tau], random[tau:], c='r', lw=0.1)
             plt.show()
+            '''
 
         sess.close()
 
@@ -572,14 +567,14 @@ def main(_):
         bounds = [{'name': 'kf',    'type': 'continuous',  'domain': (0.0, 100.0)},
                   {'name': 'kr',    'type': 'continuous',  'domain': (0.0, 100.0)},
                   {'name': 'alpha', 'type': 'continuous',  'domain': (0.0, 100.0)}]
-        # 事前探索を行います。
+
+        # Do Presearch
         opt_mnist = GPyOpt.methods.BayesianOptimization(f=opt, domain=bounds)
 
-        # 最適なパラメータを探索します。
+        # Search Optimized Parameter
         opt_mnist.run_optimization(max_iter=10)
         print("optimized parameters: {0}".format(opt_mnist.x_opt))
         print("optimized loss: {0}".format(opt_mnist.fx_opt))
-    
 
             
 if __name__ == "__main__":
