@@ -38,25 +38,25 @@ is_save = False
 is_save = True
 
 # Drawing graphs flag
-is_plot = True
 is_plot = False
+is_plot = True
 
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
 seq_len = 1000
 
-epoch_size = 1
+epoch_size = 1000
 input_units = 2
 inner_units = 10
 output_units = 2
 
 # 中間層層数
-inner_layers = 1
+inner_layers = 3
 
-Kf = 9.750
-Kr = 16.872
-Alpha = 36.552
+Kf = 0.1
+Kr = 0.9
+Alpha = 10.0
 
 tau = int(seq_len/100)
 tau = 1
@@ -64,10 +64,10 @@ tau = 1
 def make_data(length, loop=0):
     # print('making data...')
 
-    sound1 = my.Sound.load_sound('../music/ifudoudou.wav')
-    sound2 = my.Sound.load_sound('../music/jinglebells.wav')
     sound1 = my.Sound.load_sound('../music/jinglebells.wav')
     sound2 = my.Sound.load_sound('../music/ifudoudou.wav')
+    sound1 = my.Sound.load_sound('../music/ifudoudou.wav')
+    sound2 = my.Sound.load_sound('../music/jinglebells.wav')
 
     sound1 = sound1[30000:]
     sound2 = sound2[30000:]
@@ -82,15 +82,20 @@ def make_data(length, loop=0):
 
     x1 = np.linspace(start=0, stop=length, num=length).reshape(length,1)
     y1 = np.sin(2*np.pi*x1) + 0.1*np.random.rand(length,1)
-    y1 = np.sin(x1)
+    y1 = np.sin(x1/2)
 
     x2 = np.linspace(start=0, stop=length, num=length).reshape(length,1)
     y2 = np.sin(2*2*np.pi*x2) + 0.1*np.random.rand(length,1)
-    y2 = np.sin(2*x2)    
+    y2 = np.sin(x2)    
 
     # y2 = np.random.rand(length, 1)
     # y2 = 2*y1[1:] + 0.01*np.random.rand()
     # y1 = y1[:-1]
+
+    '''
+    y1 = np.linspace(0, 100, length)
+    y2 = np.linspace(0, 100, length)
+    '''
 
     # data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
     data = np.resize(np.transpose([y1, y2]),(length, input_units))
@@ -127,16 +132,16 @@ def set_innerlayers(inputs, layers_size):
 
     return inner_output
 
-def inference(inputs, Wi, Wo):
+def inference(inputs, Wi, bi, Wo, bo):
     with tf.name_scope('Layer1'):
         # input: [None, input_units]
-        fi = tf.matmul(inputs, Wi)
+        fi = tf.matmul(inputs, Wi) + bi
         sigm = tf.nn.sigmoid(fi)
 
     inner_output = set_innerlayers(sigm, inner_layers)
 
     with tf.name_scope('Layer' + str(inner_layers+2)):
-        fo = tf.matmul(inner_output, Wo)
+        fo = tf.matmul(inner_output, Wo) + bo
         # tf.summary.histogram('fo', fo)
 
     return fo
@@ -179,27 +184,20 @@ def loss(inputs, outputs, length):
     print('output::{}'.format(outputs[:,0]))
     lyapunov = tf.zeros([output_units])
 
-    '''
-        ic = info_content.info_content()
-
-        # Transfer Entropyが増加するように誤差関数を設定
-        entropy, prob = ic.get_TE_for_tf3(inputs[:,0],outputs[:,0], seq_len)
-        tf.summary.scalar('Entropy', entropy)
-        # Entropy = tf.reduce_mean(tf.log1p(outputs[:,0]))
-
-    return -entropy, prob
-    '''
     with tf.name_scope('loss_tf'):
-        x = (outputs[:,0]-tf.reduce_min(outputs[:,0]))/(tf.reduce_max(outputs[:,0])-tf.reduce_min(outputs[:,0]))
-        y = (inputs[:,0]-tf.reduce_min(inputs[:,0]))/(tf.reduce_max(inputs[:,0])-tf.reduce_min(inputs[:,0]))
+        in_data, out_data = inputs[:,0], outputs[:,0]
+        in_data = (in_data-tf.reduce_min(in_data))/(tf.reduce_max(in_data)-tf.reduce_min(in_data))
+        out_data = (out_data-tf.reduce_min(out_data))/(tf.reduce_max(out_data)-tf.reduce_min(out_data))
 
         ic = info_content.info_content()
-        entropy, pdf = ic.get_TE_for_tf4(x, y, seq_len)
+        # TF(y->x): input->output
+        entropy, pdf = ic.get_TE_for_tf4(out_data, in_data, seq_len)
         print('entropy_shape: ', entropy)
 
     return entropy, lyapunov, pdf
     
 
+    '''
     with tf.name_scope('loss_lyapunov'):
         # リアプノフ指数が増加するように誤差関数を設定
         lyapunov = []
@@ -217,16 +215,17 @@ def loss(inputs, outputs, length):
         return tf.reduce_max(loss), lyapunov
         # return tf.reduce_min(loss), lyapunov
         # return loss, lyapunov
+    '''
 
 
 def train(error, update_params):
     # return tf.train.GradientDescentOptimizer(learning_rate=0.001).minimize(error)
     with tf.name_scope('training'):
-        opt = tf.train.GradientDescentOptimizer(learning_rate=0.001)
-        # opt = tf.train.AdamOptimizer()
+        # opt = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+        opt = tf.train.AdamOptimizer()
 
-        training = opt.minimize(error, var_list=update_params)
-        # training = opt.minimize(error)
+        # training = opt.minimize(error, var_list=update_params)
+        training = opt.minimize(error)
 
     return training
 
@@ -398,19 +397,29 @@ def main(_):
             Wi = tf.Variable(weight(shape=[input_units, inner_units]), name='Wi')
             tf.summary.histogram('Wi', Wi)
 
+        with tf.name_scope('bi'):
+            bi = tf.Variable(weight(shape=[inner_units]), name='bi')
+            tf.summary.histogram('bi', bi)
+
         with tf.name_scope('Wo'):
             Wo = tf.Variable(weight(shape=[inner_units, output_units]), name='Wo')
             tf.summary.histogram('Wo', Wo)
 
+        with tf.name_scope('bo'):
+            bo = tf.Variable(weight(shape=[output_units]), name='bo')
+            tf.summary.histogram('bo', bo)
 
 
-        outputs = inference(inputs, Wi, Wo)
 
-        # 1st-arg <= 2nd-arg
+        outputs = inference(inputs, Wi, bi, Wo, bo)
+
+        # TF(1st-arg <= 2nd-arg)
         error, lyapunov, pdf = loss(inputs, outputs, seq_len)
         dm, dmx, dmxx, dmxy = pdf['dm'], pdf['dmx'], pdf['dmxx'], pdf['dmxy']
         x = tf.linspace(-5.,5.,10000)
         # dmxxo = dmxx.sample(10000)
+        np.random.seed(0)
+        x = np.reshape(np.linspace(-1.,2.,seq_len), [seq_len,1])
         dmxo = dmx.prob(x)
 
         tf.summary.scalar('error', error)
@@ -442,7 +451,7 @@ def main(_):
         l_list = []
         # data = []
         for epoch in range(epoch_size):
-            data = make_data(seq_len, loop=epoch)
+            data = make_data(seq_len, loop=0)
             feed_dict = {inputs:data}
 
             start = time.time()
@@ -463,6 +472,8 @@ def main(_):
                 print('\n[epoch:{}-times]'.format(epoch))
                 print("elapsed_time: ", int((end-start)*1000), '[sec]')
                 print("error:{}".format(error_val))
+                # print(d)
+                # print(out)
 
             if is_plot and epoch%(epoch_size-1) == 0:
 
@@ -471,13 +482,16 @@ def main(_):
                 out2 = out1[int(seq_len/2):int(seq_len/2)+100]
                 '''
 
-                data2 = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
-                out2 = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
+                data1, out1 = data[0:100,0], out[0:100,0]
+                data2 = (data1-min(data1))/(max(data1)-min(data1))
+                out2 = (out1-min(out1))/(max(out1)-min(out1))
 
                 plt.figure()
                 plt.title('time-data-graph(epoch:{})'.format(epoch))
-                plt.plot(range(len(data2)), data2, c='b', lw=1)
-                plt.plot(range(len(out2)), out2, c='r', lw=1)
+                plt.plot(range(len(data2)), data2, c='b', lw=1, label='input')
+                plt.plot(range(len(data2)), -data2, c='b', lw=1, label='-input')
+                plt.plot(range(len(out2)), out2, c='r', lw=1, label='output')
+                plt.legend(loc=2)
 
                 '''
                 plt.figure()
@@ -507,10 +521,13 @@ def main(_):
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
 
         # 混合ベイズ分布ができているか確認
+        '''
         plt.figure()
         # plt.scatter(d[:,0], d[:,1], s=1)
-        plt.scatter(range(10000), d, s=1)
-        plt.show()
+        plt.plot(x, d, lw=2)
+        '''
+
+        
 
         if is_save:
             '''
@@ -550,6 +567,8 @@ def main(_):
             plt.plot(random[:-tau], random[tau:], c='r', lw=0.1)
             plt.show()
             '''
+        if is_plot:
+            plt.show()
 
         sess.close()
 

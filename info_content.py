@@ -302,7 +302,8 @@ class info_content():
         norm_y = tf.cast((y-ymin)/(ymax-ymin), tf.float32)
         '''
 
-        scale = 0.1
+        # Occurred the error when 'scale' sets the value lower than about 0.1.
+        scale = .1
 
         dm = tfd.Independent(
                 tfd.MixtureSameFamily(
@@ -335,9 +336,24 @@ class info_content():
 
         pdf = {'dm': dm, 'dmx': dmx, 'dmxx': dmxx, 'dmxy': dmxy}
 
-        nn = np.random.rand(N)
+
+        bin_tau = 1/N
+        print('bin_tau:{}, scale:{}'.format(bin_tau, scale))
+
+        ix = np.reshape(np.linspace(0,1,N), [N,1])
+        iy = np.reshape(np.linspace(0,1,N), [N,1])
+        ixy = np.concatenate((ix+bin_tau,ix,iy), axis=1)
+
+        a = dm.prob(ixy) * dmx.prob(ixy[:,1])
+        b = dmxy.prob(ixy[:,1:]) * dmxx.prob(ixy[:,:-1])
+        y = dm.prob(ixy) * tf.log(a/b + 1e-7)
+        y = tf.where(tf.is_nan(y), tf.zeros_like(y), y)
+        print('y-shape: ', y)
+        entropy = tf.reduce_sum(y)
+
+        '''
+        # FOR-Grammar is BAD.
         l = list(itertools.product(nn, nn, nn))
-        entropy = 0
         for i,j,k in l:
             print('i:{}, j:{}, k:{}'.format(i,j,k))
             a = dm.prob([i,j,k]) * dmx.prob([j])
@@ -345,6 +361,7 @@ class info_content():
             y = dm.prob([i,j,k]) * tf.log1p(a/b)
             y = tf.reshape(y, [])
             entropy = entropy + tf.cond(tf.is_nan(y), lambda:0., lambda:y)
+        '''
         
         print('complete reading')
 
