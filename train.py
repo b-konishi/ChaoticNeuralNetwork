@@ -33,20 +33,20 @@ MODE = 'opt'
 MODE = 'predict'
 MODE = 'train'
 
-# モデルの保存
+# Save the model
 is_save = False
 is_save = True
 
-# グラフ描画
-is_plot = False
+# Drawing graphs flag
 is_plot = True
+is_plot = False
 
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 100
+seq_len = 1000
 
-epoch_size = 1000
+epoch_size = 1
 input_units = 2
 inner_units = 10
 output_units = 2
@@ -194,7 +194,7 @@ def loss(inputs, outputs, length):
         y = (inputs[:,0]-tf.reduce_min(inputs[:,0]))/(tf.reduce_max(inputs[:,0])-tf.reduce_min(inputs[:,0]))
 
         ic = info_content.info_content()
-        entropy, pdf = ic.get_TE_for_tf4(x,y, seq_len)
+        entropy, pdf = ic.get_TE_for_tf4(x, y, seq_len)
         print('entropy_shape: ', entropy)
 
     return entropy, lyapunov, pdf
@@ -222,7 +222,8 @@ def loss(inputs, outputs, length):
 def train(error, update_params):
     # return tf.train.GradientDescentOptimizer(learning_rate=0.001).minimize(error)
     with tf.name_scope('training'):
-        opt = tf.train.AdamOptimizer()
+        opt = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+        # opt = tf.train.AdamOptimizer()
 
         training = opt.minimize(error, var_list=update_params)
         # training = opt.minimize(error)
@@ -386,14 +387,7 @@ def opt(x):
 
     return osess.run(error)
 
-def set_debugger_session():
-    sess = K.get_session()
-    sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-    K.set_session(sess)
-
-
 def main(_):
-
 
     if MODE == 'train':
         sess = tf.InteractiveSession()
@@ -414,12 +408,10 @@ def main(_):
 
         # 1st-arg <= 2nd-arg
         error, lyapunov, pdf = loss(inputs, outputs, seq_len)
-        '''
-        dmx = pdf
-
-        x = tf.linspace(-1.,1.,1000)
-        dmo = dmx.prob(x)
-        '''
+        dm, dmx, dmxx, dmxy = pdf['dm'], pdf['dmx'], pdf['dmxx'], pdf['dmxy']
+        x = tf.linspace(-5.,5.,10000)
+        # dmxxo = dmxx.sample(10000)
+        dmxo = dmx.prob(x)
 
         tf.summary.scalar('error', error)
         train_step = train(error, [Wi, Wo])
@@ -441,6 +433,7 @@ def main(_):
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
 
+        # For Debug
         # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
 
         merged = tf.summary.merge_all()
@@ -454,7 +447,8 @@ def main(_):
 
             start = time.time()
             # t = sess.run(train_step, feed_dict)
-            summary, out, error_val, l, t = sess.run([merged, outputs, error, lyapunov, train_step], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+            # summary, out, error_val, l, d = sess.run([merged, outputs, error, lyapunov, dmxo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+            summary, out, error_val, l, d, t = sess.run([merged, outputs, error, lyapunov, dmxo, train_step], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
             # sess.run([ops], run_metadata=run_metadata, options=run_options)
             end = time.time()
 
@@ -513,10 +507,9 @@ def main(_):
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
 
         # 混合ベイズ分布ができているか確認
-        '''
         plt.figure()
-        plt.plot(np.linspace(-1.,1.,1000), d)
-        '''
+        # plt.scatter(d[:,0], d[:,1], s=1)
+        plt.scatter(range(10000), d, s=1)
         plt.show()
 
         if is_save:

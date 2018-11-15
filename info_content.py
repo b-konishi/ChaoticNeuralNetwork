@@ -302,7 +302,7 @@ class info_content():
         norm_y = tf.cast((y-ymin)/(ymax-ymin), tf.float32)
         '''
 
-        scale = 1.0
+        scale = 0.1
 
         dm = tfd.Independent(
                 tfd.MixtureSameFamily(
@@ -333,7 +333,7 @@ class info_content():
                         scale_diag=[scale]*2)),
                 reinterpreted_batch_ndims=0)
 
-        pdf = dmx
+        pdf = {'dm': dm, 'dmx': dmx, 'dmxx': dmxx, 'dmxy': dmxy}
 
         nn = np.random.rand(N)
         l = list(itertools.product(nn, nn, nn))
@@ -344,11 +344,11 @@ class info_content():
             b = dmxy.prob([j,k]) * dmxx.prob([i,j])
             y = dm.prob([i,j,k]) * tf.log1p(a/b)
             y = tf.reshape(y, [])
-            entropy = entropy + y
+            entropy = entropy + tf.cond(tf.is_nan(y), lambda:0., lambda:y)
         
         print('complete reading')
 
-        return -entropy, pdf
+        return entropy, pdf
 
     def get(self, prob):
         (p, px, pxx, pxy) = prob
