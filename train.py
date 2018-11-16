@@ -46,7 +46,7 @@ activation = tf.nn.tanh
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
 seq_len = 10
 
-epoch_size = 2
+epoch_size = 100
 input_units = 2
 inner_units = 2
 output_units = 2
@@ -96,7 +96,7 @@ def make_data(length, loop=0):
     y2 = np.linspace(0, 100, length)
 
     data = np.resize(np.transpose([sound1,sound2]),(length, input_units))
-    data = np.resize(np.transpose([y1, y2]),(length, input_units))
+    # data = np.resize(np.transpose([y1, y2]),(length, input_units))
     # data = np.resize(np.transpose([y1,sound1]),(length, input_units))
 
     '''
@@ -115,7 +115,7 @@ def make_data(length, loop=0):
     return data
 
 def weight(shape = []):
-    initial = tf.truncated_normal(shape, stddev = 0.01, dtype=tf.float32)
+    initial = tf.truncated_normal(shape, stddev = 0.1, dtype=tf.float32)
     # return tf.Variable(initial)
     return initial
 
@@ -159,8 +159,11 @@ def get_lyapunov(seq, dt=1/seq_len):
         seq = (seq-m)/tf.sqrt(v)
     '''
     
+    diff = tf.abs(seq[1:]-seq[:-1])
+    '''
     seq_shift = tf.manip.roll(seq, shift=1, axis=0)
     diff = tf.abs(seq - seq_shift)
+    '''
 
     '''
     本来リアプノフ指数はmean(log(f'))だが、f'<<0の場合に-Infとなってしまうため、
@@ -184,8 +187,13 @@ def loss(inputs, outputs, length):
 
     with tf.name_scope('loss_tf'):
         in_data, out_data = inputs[:,0], outputs[:,0]
-        in_data = (in_data-tf.reduce_min(in_data))/(tf.reduce_max(in_data)-tf.reduce_min(in_data))
-        out_data = (out_data-tf.reduce_min(out_data))/(tf.reduce_max(out_data)-tf.reduce_min(out_data))
+
+        norm_in = (in_data-tf.reduce_min(in_data))/(tf.reduce_max(in_data)-tf.reduce_min(in_data))
+        norm_out = (out_data-tf.reduce_min(out_data))/(tf.reduce_max(out_data)-tf.reduce_min(out_data))
+
+        in_data = tf.cond(tf.is_nan(tf.reduce_sum(norm_in)), lambda:in_data, lambda:norm_in)
+        out_data = tf.cond(tf.is_nan(tf.reduce_sum(norm_out)), lambda:out_data, lambda:norm_out)
+
         data = (in_data, out_data)
 
         ic = info_content.info_content()
@@ -193,8 +201,7 @@ def loss(inputs, outputs, length):
         entropy, pdf = ic.get_TE_for_tf4(out_data, in_data, seq_len)
         print('entropy_shape: ', entropy)
 
-    return entropy, lyapunov, pdf, data
-    
+    return -entropy, lyapunov, pdf, data
 
     '''
     with tf.name_scope('loss_lyapunov'):
@@ -221,7 +228,7 @@ def train(error, update_params):
     # return tf.train.GradientDescentOptimizer(learning_rate=0.001).minimize(error)
     with tf.name_scope('training'):
         # opt = tf.train.GradientDescentOptimizer(learning_rate=0.001)
-        opt = tf.train.AdamOptimizer(learning_rate=0.0001)
+        opt = tf.train.AdamOptimizer()
 
         # training = opt.minimize(error, var_list=update_params)
         training = opt.minimize(error)
@@ -408,16 +415,11 @@ def main(_):
             bo = tf.Variable(weight(shape=[output_units]), name='bo')
             tf.summary.histogram('bo', bo)
 
-
-
         outputs = inference(inputs, Wi, bi, Wo, bo)
 
         # TF(1st-arg <= 2nd-arg)
         error, lyapunov, pdf, tfdata = loss(inputs, outputs, seq_len)
         dm, dmx, dmxx, dmxy = pdf['dm'], pdf['dmx'], pdf['dmxx'], pdf['dmxy']
-        x = tf.linspace(-5.,5.,10000)
-        # dmxxo = dmxx.sample(10000)
-        np.random.seed(0)
         x = np.reshape(np.linspace(-1.,2.,10000), [10000,1])
         dmxo = dmx.prob(x)
 
@@ -450,13 +452,15 @@ def main(_):
         # confirm
         data = make_data(seq_len, loop=0)
         feed_dict = {inputs:data}
-        d = sess.run(dmxo, feed_dict=feed_dict)
+        d, out = sess.run([dmxo, outputs], feed_dict=feed_dict)
+        # print(out)
+        # print((out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0])))
         plt.figure()
         # plt.scatter(d[:,0], d[:,1], s=1)
-        plt.plot(x, d, lw=2)
+        plt.plot(x, d, lw=1)
         plt.show()
         
-
+        ic = info_content.info_content() 
         
         l_list = []
         # data = []
@@ -465,14 +469,15 @@ def main(_):
             feed_dict = {inputs:data}
 
             start = time.time()
-            summary, t = sess.run([merged, train_step], feed_dict)
             # summary, out, error_val, l, d = sess.run([merged, outputs, error, lyapunov, dmxo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
-            datas, out, error_val, l, d = sess.run([tfdata, outputs, error, lyapunov, dmxo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+            wi, datas, out, error_val, l, d = sess.run([Wi, tfdata, outputs, error, lyapunov, dmxo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
             # sess.run([ops], run_metadata=run_metadata, options=run_options)
+            t = sess.run(train_step, feed_dict)
             end = time.time()
             indata, outdata = datas
-            print(indata[0:100])
-            print(outdata[0:100])
+            print('wi: ', wi)
+            print('in: ', indata[0:100])
+            print('out: ', outdata[0:100])
 
             l_list.append(l[0])
 
@@ -485,6 +490,7 @@ def main(_):
                 print('\n[epoch:{}-times]'.format(epoch))
                 print("elapsed_time: ", int((end-start)*1000), '[sec]')
                 print("error:{}".format(error_val))
+                print("Transfer-Entropy: ", ic.get_TE2(outdata, indata))
                 # print(d)
                 # print(out)
 
@@ -529,7 +535,7 @@ def main(_):
             writer = tf.summary.FileWriter(logdir=log_path, graph=graph)
             writer.flush()
             '''
-            writer.add_summary(summary, epoch)
+            # writer.add_summary(summary, epoch)
 
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
 

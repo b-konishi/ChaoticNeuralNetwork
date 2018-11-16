@@ -108,9 +108,13 @@ class info_content():
 
         return te
 
+    # TF(x<=y)
     def get_TE2(self, x, y):
         xmax, xmin = max(x), min(x)
         ymax, ymin = max(y), min(y)
+
+        print('np.x: ', x)
+        print('np.y: ', y)
 
         N = min(len(x), len(y)) - 1
         Nx = int(np.log2(N) + 1)
@@ -121,9 +125,11 @@ class info_content():
         p, px, pxx, pxy = dict(), dict(), dict(), dict()
 
         for (x1, (x,y)) in zip(x[1:], zip(x[:-1],y[:-1])):
-            norm_x1 = int(Nx * (x1-xmin)/(xmax-xmin))
-            norm_x = int(Nx * (x-xmin)/(xmax-xmin))
-            norm_y = int(Ny * (y-ymin)/(ymax-ymin))
+            norm_x1 = int(Nx * (x1 if xmax-xmin == 0 else (x1-xmin)/(xmax-xmin)))
+            norm_x = int(Nx * (x if xmax-xmin == 0 else (x-xmin)/(xmax-xmin)))
+            norm_y = int(Ny * (y if ymax-ymin == 0 else (y-ymin)/(ymax-ymin)))
+
+            print(norm_x1, norm_x, norm_y)
 
             p[(norm_x1, norm_x, norm_y)] = p.get((norm_x1, norm_x, norm_y), 0) + 1/N
             px[norm_x] = px.get(norm_x, 0) + 1/N
@@ -303,12 +309,13 @@ class info_content():
         '''
 
         # Occurred the error when 'scale' sets the value lower than about 0.1.
-        sigma_rate = 2
+        sigma_rate = 3
         scale = (1/n)/(sigma_rate*2)
+        # scale = .1
 
         dm = tfd.Independent(
                 tfd.MixtureSameFamily(
-                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
+                    mixture_distribution=tfd.Categorical(probs=[1]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
                         loc=tf.transpose([x[1:], x[:-1], y[:-1]]),
                         scale_diag=[[scale]*3])),
@@ -321,7 +328,7 @@ class info_content():
 
         dmxx = tfd.Independent(
                 tfd.MixtureSameFamily(
-                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
+                    mixture_distribution=tfd.Categorical(probs=[1]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
                         loc=tf.transpose([x[1:],x[:-1]]),
                         scale_diag=[scale]*2)),
@@ -329,7 +336,7 @@ class info_content():
 
         dmxy = tfd.Independent(
                 tfd.MixtureSameFamily(
-                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
+                    mixture_distribution=tfd.Categorical(probs=[1]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
                         loc=tf.transpose([x[:-1],y[:-1]]),
                         scale_diag=[scale]*2)),
@@ -347,7 +354,7 @@ class info_content():
 
         a = dm.prob(ixy) * dmx.prob(ixy[:,1])
         b = dmxy.prob(ixy[:,1:]) * dmxx.prob(ixy[:,:-1])
-        y = dm.prob(ixy) * tf.log(a/b + 1e-7)
+        y = dm.prob(ixy) * tf.log(a/b + 1e-30)
         y = tf.where(tf.is_nan(y), tf.zeros_like(y), y)
         print('y-shape: ', y)
         entropy = tf.reduce_sum(y)
@@ -424,6 +431,7 @@ plt.plot(range(20), yseq[:20], c='r', lw=2)
 plt.show()
 '''
 
+'''
 
 
 if len(xseq) != len(yseq):
@@ -440,6 +448,7 @@ te_xy = ic.get_TE2(yseq, xseq)
 te_yx = ic.get_TE2(xseq, yseq)
 print('te_x->y: ', te_xy)
 print('te_y->x: ', te_yx)
+'''
 
 '''
 print('\n##### TENSORFLOW #####')
