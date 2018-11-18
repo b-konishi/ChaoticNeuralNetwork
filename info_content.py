@@ -110,6 +110,9 @@ class info_content():
 
     # TF(x<=y)
     def get_TE2(self, x, y):
+        if any(np.isnan(x)) or any(np.isnan(y)):
+            return 0.
+    
         xmax, xmin = max(x), min(x)
         ymax, ymin = max(y), min(y)
 
@@ -128,8 +131,6 @@ class info_content():
             norm_x1 = int(Nx * (x1 if xmax-xmin == 0 else (x1-xmin)/(xmax-xmin)))
             norm_x = int(Nx * (x if xmax-xmin == 0 else (x-xmin)/(xmax-xmin)))
             norm_y = int(Ny * (y if ymax-ymin == 0 else (y-ymin)/(ymax-ymin)))
-
-            print(norm_x1, norm_x, norm_y)
 
             p[(norm_x1, norm_x, norm_y)] = p.get((norm_x1, norm_x, norm_y), 0) + 1/N
             px[norm_x] = px.get(norm_x, 0) + 1/N
@@ -309,13 +310,13 @@ class info_content():
         '''
 
         # Occurred the error when 'scale' sets the value lower than about 0.1.
-        sigma_rate = 3
+        sigma_rate = 1/10
         scale = (1/n)/(sigma_rate*2)
         # scale = .1
 
         dm = tfd.Independent(
                 tfd.MixtureSameFamily(
-                    mixture_distribution=tfd.Categorical(probs=[1]*n),
+                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
                         loc=tf.transpose([x[1:], x[:-1], y[:-1]]),
                         scale_diag=[[scale]*3])),
@@ -328,7 +329,7 @@ class info_content():
 
         dmxx = tfd.Independent(
                 tfd.MixtureSameFamily(
-                    mixture_distribution=tfd.Categorical(probs=[1]*n),
+                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
                         loc=tf.transpose([x[1:],x[:-1]]),
                         scale_diag=[scale]*2)),
@@ -336,7 +337,7 @@ class info_content():
 
         dmxy = tfd.Independent(
                 tfd.MixtureSameFamily(
-                    mixture_distribution=tfd.Categorical(probs=[1]*n),
+                    mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
                         loc=tf.transpose([x[:-1],y[:-1]]),
                         scale_diag=[scale]*2)),
@@ -345,11 +346,14 @@ class info_content():
         pdf = {'dm': dm, 'dmx': dmx, 'dmxx': dmxx, 'dmxy': dmxy}
 
 
-        bin_tau = 1/N
+        sampling = 7
+        bin_tau = sampling/10
+        # TODO: bin_tauの値によっては勾配がnan/0になる
+        bin_tau = 0.1
         print('bin_tau:{}, scale:{}'.format(bin_tau, scale))
 
-        ix = np.reshape(np.linspace(0,1,N), [N,1])
-        iy = np.reshape(np.linspace(0,1,N), [N,1])
+        ix = np.reshape(np.linspace(0,1,sampling), [sampling,1])
+        iy = np.reshape(np.linspace(0,1,sampling), [sampling,1])
         ixy = np.concatenate((ix+bin_tau,ix,iy), axis=1)
 
         a = dm.prob(ixy) * dmx.prob(ixy[:,1])
