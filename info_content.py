@@ -116,9 +116,6 @@ class info_content():
         xmax, xmin = max(x), min(x)
         ymax, ymin = max(y), min(y)
 
-        print('np.x: ', x)
-        print('np.y: ', y)
-
         N = min(len(x), len(y)) - 1
         Nx = int(np.log2(N) + 1)
         Ny = Nx
@@ -310,9 +307,9 @@ class info_content():
         '''
 
         # Occurred the error when 'scale' sets the value lower than about 0.1.
-        sigma_rate = 1/10
+        sigma_rate = .1
         scale = (1/n)/(sigma_rate*2)
-        # scale = .1
+        scale = .1
 
         dm = tfd.Independent(
                 tfd.MixtureSameFamily(
@@ -346,19 +343,21 @@ class info_content():
         pdf = {'dm': dm, 'dmx': dmx, 'dmxx': dmxx, 'dmxy': dmxy}
 
 
-        sampling = 7
-        bin_tau = sampling/10
+        # WARNING: memory-occupated-size=sampling^3
+        sampling = 20
+
         # TODO: bin_tauの値によっては勾配がnan/0になる
+        bin_tau = sampling/10
         bin_tau = 0.1
         print('bin_tau:{}, scale:{}'.format(bin_tau, scale))
 
         ix = np.reshape(np.linspace(0,1,sampling), [sampling,1])
         iy = np.reshape(np.linspace(0,1,sampling), [sampling,1])
-        ixy = np.concatenate((ix+bin_tau,ix,iy), axis=1)
+        ixy = np.concatenate(list(itertools.product(ix+bin_tau,ix,iy)), axis=1).T
 
-        a = dm.prob(ixy) * dmx.prob(ixy[:,1])
-        b = dmxy.prob(ixy[:,1:]) * dmxx.prob(ixy[:,:-1])
-        y = dm.prob(ixy) * tf.log(a/b + 1e-30)
+        p, px, pxx, pxy = dm.prob(ixy), dmx.prob(ixy[:,1]), dmxx.prob(ixy[:,:-1]), dmxy.prob(ixy[:,1:])
+
+        y = p * tf.log((p*px)/(pxy*pxx) + 1e-30)
         y = tf.where(tf.is_nan(y), tf.zeros_like(y), y)
         print('y-shape: ', y)
         entropy = tf.reduce_sum(y)
