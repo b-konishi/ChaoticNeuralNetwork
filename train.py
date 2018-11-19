@@ -42,9 +42,9 @@ is_plot = True
 activation = tf.nn.tanh
 
 # 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 100
+seq_len = 1000
 
-epoch_size = 1000
+epoch_size = 10000
 input_units = 2
 inner_units = 20
 output_units = 1
@@ -131,7 +131,7 @@ def set_innerlayers(inputs, layers_size):
     return inner_output
 
 def normalize(v):
-    tf.name_scope('Normalize'):
+    with tf.name_scope('Normalize'):
         norm = (v-tf.reduce_min(v,0))/(tf.reduce_max(v,0)-tf.reduce_min(v,0))
         sign = tf.nn.relu(tf.sign(v))
         var = tf.where(tf.is_nan(norm), sign, norm)
@@ -207,12 +207,15 @@ def loss(inputs, outputs, length):
                 lyapunov.append(get_lyapunov(outputs[:,i]))
 
         with tf.name_scope('TE-Loss'):
-            in_data, out_data = inputs[:,0], outputs[:,0]
+            entropy = 1
+            for i in range(input_units):
+                in_data, out_data = inputs[:,i], outputs[:,0]
 
-            ic = info_content.info_content()
-            # TF(y->x): input->output
-            entropy, pdf = ic.get_TE_for_tf4(out_data, in_data, seq_len)
-            print('entropy_shape: ', entropy)
+                ic = info_content.info_content()
+                # TF(y->x): input->output
+                en, pdf = ic.get_TE_for_tf4(out_data, in_data, seq_len)
+                entropy *= en
+                print('entropy_shape: ', entropy)
 
         return -entropy, lyapunov, pdf
 
@@ -241,15 +244,21 @@ def train(error, update_params):
         # opt = tf.train.GradientDescentOptimizer(learning_rate=0.001)
         opt = tf.train.AdamOptimizer(1.0)
         grads = opt.compute_gradients(error, var_list=update_params)
+
         grad = grads[0]
         g = (tf.where(tf.is_nan(grad[0]), tf.zeros_like(grad[0]), grad[0]),)
-        g += grad[1:]
-        grads = [g]
-        
-        # training = opt.minimize(grads, var_list=update_params)
-        training = opt.apply_gradients(grads)
+        g += (grad[1],)
 
-    return training, g
+        grad2 = grads[1]
+        g2 = (tf.where(tf.is_nan(grad2[0]), tf.zeros_like(grad2[0]), grad2[0]),)
+        g2 += (grad2[1],)
+
+        grads2 = [g, g2]
+
+        # training = opt.minimize(grads, var_list=update_params)
+        training = opt.apply_gradients(grads2)
+
+    return training, grads
 
 
 def predict():
@@ -321,12 +330,12 @@ def predict():
     out = out * 1000
     print('predictor-output:\n{}'.format(out))
     sampling = 44100
-    my.Sound.save_sound(sampling, out[:,0], '../music/chaos.wav')
-    my.Sound.save_sound(sampling, out[:,1], '../music/chaos2.wav')
+    my.Sound.save_sound(out[:,0], '../music/chaos.wav', sampling)
+    my.Sound.save_sound(out[:,1], '../music/chaos2.wav', sampling)
     '''
 
     # random_sound = np.random.rand(pseq_len)*1000
-    # save_sound(sampling, random_sound.astype(np.int), '../music/random.wav')
+    # save_sound(random_sound.astype(np.int), '../music/random.wav', sampling)
 
     # In case of No Learning
     if compare:
@@ -375,8 +384,8 @@ def predict():
 
         out_nolearn = out_nolearn * float(10000)
         print('no-learning-output:\n{}'.format(out_nolearn))
-        my.Sound.save_sound(sampling, out_nolearn[:,0], '../music/chaos_no.wav')
-        my.Sound.save_sound(sampling, out_nolearn[:,1], '../music/chaos_no2.wav')
+        my.Sound.save_sound(out_nolearn[:,0], '../music/chaos_no.wav', sampling)
+        my.Sound.save_sound(out_nolearn[:,1], '../music/chaos_no2.wav', sampling)
         '''
 
     if is_plot:
@@ -469,6 +478,7 @@ def main(_):
         ic = info_content.info_content() 
         
         l_list, te_list = [], []
+        out_sound = []
         in_color, out_color = 'r', 'b'
 
         for epoch in range(epoch_size):
@@ -483,11 +493,13 @@ def main(_):
             summary, t, gradients = sess.run([merged, train_step, grad], feed_dict)
             end = time.time()
             indata, outdata = [data[:,0], out[:,0]]
+            out_sound.extend(out[:,0])
             print('wi: ', wi[:,0:10])
             print('wo: ', wo[0:10,:])
             print('in: ', indata[0:10])
             print('out: ', outdata[0:10])
-            print('grad: ', gradients[0][0:10])
+            # print('grad: ', gradients[0][0:10])
+            print('grad: ', gradients)
 
             l_list.append(l[0])
             te_list.append(ic.get_TE2(outdata, indata))
@@ -507,10 +519,12 @@ def main(_):
                 '''
 
                 data1, out1 = data[:,0], out[:,0]
+                data2 = data[:,1]
 
                 plt.figure()
                 plt.title('time-data-graph(epoch:{})'.format(epoch))
                 plt.plot(range(len(data1)), data1, c=in_color, lw=1, label='input')
+                plt.plot(range(len(data2)), data2, c='g', lw=1, label='input')
                 # plt.plot(range(len(data1)), -data1+1, c='purple', lw=1, label='-input')
                 plt.plot(range(len(out1)), out1, c=out_color, lw=1, label='output')
                 plt.legend(loc=2)
@@ -527,6 +541,8 @@ def main(_):
                 ax.scatter3D(data1[:-2*tau],data1[tau:-tau],data1[2*tau:], c=in_color, label='input')
                 ax.scatter3D(out1[:-2*tau],out1[tau:-tau],out1[2*tau:], c=out_color, label='output')
                 plt.legend(loc=2)
+
+
             
 
             # print("output:{}".format(out))
@@ -540,6 +556,9 @@ def main(_):
             writer.add_summary(summary, epoch)
 
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
+
+        sampling_freq = 14700
+        my.Sound.save_sound((np.array(out_sound)-0.5)*40000, '../music/chaos.wav', sampling_freq)
 
         if True:
             plt.figure()

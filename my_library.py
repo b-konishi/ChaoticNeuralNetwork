@@ -10,11 +10,11 @@ class Sound:
     def load_sound(filename):
         fs, sound = read(filename)
         if (sound.shape[1] == 2):
-            sound = sound[:,0]
+            load = sound[:,0]
 
-        return sound
+        return load
 
-    def save_sound(sampling, data, filename):
+    def save_sound(data, filename, sampling=44100):
         w = wave.Wave_write(filename)
         w.setparams((
             1,                        # channel
