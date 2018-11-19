@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
 
+'''
+誤差関数が出力層1ユニット目しか対応していない
+重みにあとから単位ブロック行列を掛けるのではなく、初めからそうしたい（勾配行列を変える？）
+'''
+
 # my library
 import my_library as my
 import chaotic_nn_cell
@@ -41,13 +46,12 @@ is_plot = True
 
 activation = tf.nn.tanh
 
-# 1秒で取れるデータ数に設定(1秒おきにリアプノフ指数計測)
-seq_len = 1000
+seq_len = 100
 
-epoch_size = 10000
+epoch_size = 10
 input_units = 2
 inner_units = 20
-output_units = 1
+output_units = 2
 
 # 中間層層数
 inner_layers = 1
@@ -70,8 +74,8 @@ def make_data(length, loop=0):
     sound1 = my.Sound.load_sound('../music/ifudoudou.wav')
     sound2 = my.Sound.load_sound('../music/jinglebells.wav')
 
-    sound1 = sound1[30000:1000000]
-    sound2 = sound2[30000:1000000]
+    sound1 = sound1[30000:]
+    sound2 = sound2[30000:]
 
     loop1 = loop % int(len(sound1)/length)
     loop2 = loop % int(len(sound2)/length)
@@ -163,6 +167,20 @@ def inference(length):
     inner_output = set_innerlayers(sigm, inner_layers)
 
     with tf.name_scope('Output_Layer'):
+        if inner_units % output_units != 0:
+            print("Can't make the clusters")
+            exit()
+        cluster_size = int(inner_units / output_units)
+        print('cluster: ', cluster_size)
+        one = [1]*cluster_size
+        one.extend([0]*(inner_units-cluster_size))
+        ones = []
+        for i in range(output_units):
+            ones.append(np.roll(one, cluster_size*i))
+        ones = np.reshape(ones, [output_units, inner_units]).T
+
+        Io = tf.cast(ones, tf.float32)
+
         with tf.name_scope('Wo'):
             Wo = tf.Variable(weight(shape=[inner_units, output_units]), name='Wo')
             tf.summary.histogram('Wo', Wo)
@@ -173,7 +191,7 @@ def inference(length):
             tf.summary.histogram('bo', bo)
             params['bo'] = bo
 
-        fo = tf.matmul(inner_output, Wo) + bo
+        fo = tf.matmul(inner_output, tf.multiply(Wo, Io)) + bo
         outputs = normalize(fo)
 
     return inputs, outputs, params
@@ -195,7 +213,7 @@ def get_lyapunov(seq, dt=1/seq_len):
     return lyapunov
 
 
-def loss(inputs, outputs, length):
+def loss(inputs, outputs, length, mode):
     with tf.name_scope('LOSS'):
         print('input::{}'.format(inputs[:,0]))
         print('output::{}'.format(outputs[:,0]))
@@ -207,15 +225,18 @@ def loss(inputs, outputs, length):
                 lyapunov.append(get_lyapunov(outputs[:,i]))
 
         with tf.name_scope('TE-Loss'):
-            entropy = 1
+            entropy = 0
             for i in range(input_units):
                 in_data, out_data = inputs[:,i], outputs[:,0]
 
                 ic = info_content.info_content()
-                # TF(y->x): input->output
-                en, pdf = ic.get_TE_for_tf4(out_data, in_data, seq_len)
-                entropy *= en
-                print('entropy_shape: ', entropy)
+                # TF(y->x)
+                en, pdf = ic.get_TE_for_tf4(
+                    tf.cond(mode, lambda:out_data, lambda:in_data),
+                    tf.cond(mode, lambda:in_data, lambda:out_data),
+                    seq_len)
+                entropy += en
+            print('entropy_shape: ', entropy)
 
         return -entropy, lyapunov, pdf
 
@@ -243,9 +264,17 @@ def train(error, update_params):
     with tf.name_scope('training'):
         # opt = tf.train.GradientDescentOptimizer(learning_rate=0.001)
         opt = tf.train.AdamOptimizer(1.0)
-        grads = opt.compute_gradients(error, var_list=update_params)
+        grads_ = opt.compute_gradients(error, var_list=update_params)
+        # grads_ = [(grad1,var1),(grad2,var2),...]
 
-        grad = grads[0]
+        grads = []
+        for g in grads_:
+            g_ = tf.where(tf.is_nan(g[0]), tf.zeros_like(g[0]), g[0])
+            grads.append((g_, g[1]))
+
+
+        '''
+        grad_tuple = grads[0]
         g = (tf.where(tf.is_nan(grad[0]), tf.zeros_like(grad[0]), grad[0]),)
         g += (grad[1],)
 
@@ -254,9 +283,10 @@ def train(error, update_params):
         g2 += (grad2[1],)
 
         grads2 = [g, g2]
+        '''
 
         # training = opt.minimize(grads, var_list=update_params)
-        training = opt.apply_gradients(grads2)
+        training = opt.apply_gradients(grads)
 
     return training, grads
 
@@ -422,10 +452,14 @@ def main(_):
     if MODE == 'train':
         sess = tf.InteractiveSession()
 
+        with tf.name_scope('Mode'):
+            Mode = tf.placeholder(dtype = tf.bool, name='Mode')
+            mode = True
+
         inputs, outputs, params = inference(seq_len)
         Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
 
-        error, lyapunov, pdf = loss(inputs, outputs, seq_len)
+        error, lyapunov, pdf = loss(inputs, outputs, seq_len, Mode)
 
         dm, dmx, dmxx, dmxy = pdf['dm'], pdf['dmx'], pdf['dmxx'], pdf['dmxy']
         sampling = 10000
@@ -438,7 +472,7 @@ def main(_):
         dmxyo = dmxy.prob(ixy[:,1:])
 
         tf.summary.scalar('error', error)
-        train_step, grad = train(error, [Wo, bo])
+        train_step, grad = train(error, [Wi, bi, Wo, bo])
 
         with tf.name_scope('lyapunov'):
             for i in range(output_units):
@@ -484,7 +518,7 @@ def main(_):
         for epoch in range(epoch_size):
             print('\n[epoch:{}-times]'.format(epoch))
             data = make_data(seq_len, loop=epoch)
-            feed_dict = {inputs:data}
+            feed_dict = {inputs:data, Mode:mode}
 
             start = time.time()
             # summary, out, error_val, l, d = sess.run([merged, outputs, error, lyapunov, dmxo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
@@ -518,17 +552,21 @@ def main(_):
                 out2 = out1[int(seq_len/2):int(seq_len/2)+100]
                 '''
 
-                data1, out1 = data[:,0], out[:,0]
-                data2 = data[:,1]
+                data1, data2, out1, out2 = data[:,0], data[:,1], out[:,0], out[:,1]
 
                 plt.figure()
-                plt.title('time-data-graph(epoch:{})'.format(epoch))
-                plt.plot(range(len(data1)), data1, c=in_color, lw=1, label='input')
-                plt.plot(range(len(data2)), data2, c='g', lw=1, label='input')
-                # plt.plot(range(len(data1)), -data1+1, c='purple', lw=1, label='-input')
-                plt.plot(range(len(out1)), out1, c=out_color, lw=1, label='output')
+                plt.title('time-input-graph(epoch:{})'.format(epoch))
+                plt.plot(range(len(data1)), data1, c='r', lw=1, label='input1')
+                plt.plot(range(len(data2)), data2, c='b', lw=1, label='input2')
                 plt.legend(loc=2)
 
+                plt.figure()
+                plt.title('time-output-graph(epoch:{})'.format(epoch))
+                plt.plot(range(len(out1)), out1, c='r', lw=1, label='output1')
+                plt.plot(range(len(out2)), out2, c='b', lw=1, label='output2')
+                plt.legend(loc=2)
+
+                '''
                 plt.figure()
                 plt.title('delayed-2Dgraph(epoch:{})'.format(epoch))
                 plt.plot(data1[:-tau], data1[tau:], c=in_color, lw=1, label='input')
@@ -536,11 +574,12 @@ def main(_):
                 plt.legend(loc=2)
 
                 fig = plt.figure()
-                ax = fig.add_subplot(111,projection='3d')
+                ax = fig.add_subplot(111, projection='3d')
                 ax.set_title('delayed-out-3Dgraph(epoch:{})'.format(epoch))
                 ax.scatter3D(data1[:-2*tau],data1[tau:-tau],data1[2*tau:], c=in_color, label='input')
                 ax.scatter3D(out1[:-2*tau],out1[tau:-tau],out1[2*tau:], c=out_color, label='output')
                 plt.legend(loc=2)
+                '''
 
 
             
@@ -560,14 +599,14 @@ def main(_):
         sampling_freq = 14700
         my.Sound.save_sound((np.array(out_sound)-0.5)*40000, '../music/chaos.wav', sampling_freq)
 
-        if True:
+        if False:
             plt.figure()
             plt.title('Transfer Entropy')
             plt.plot(range(len(te_list)), te_list)
 
 
         # 混合ベイズ分布ができているか確認
-        if True:
+        if False:
             plt.figure()
             plt.title('pdf: p(x)')
             # plt.scatter(dx[:,0], dx[:,1], s=1)
