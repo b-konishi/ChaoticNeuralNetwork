@@ -107,6 +107,7 @@ def make_data(length, loop=0):
     # data = np.resize(np.transpose([y1,sound1]),(length, input_units))
 
     data = data.astype(np.float32)
+    '''
     # Normalization
     for i in range(input_units):
         d = data[:,i]
@@ -115,6 +116,7 @@ def make_data(length, loop=0):
         else:
             norm = np.clip(np.sign(d), 0., 1.)
         data[:,i] = norm
+    '''
 
     return data
 
