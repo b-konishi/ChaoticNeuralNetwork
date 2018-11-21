@@ -4,8 +4,10 @@
 - numpy
 - GPy
 - GPyOpt
-- Tensorflow
+- tensorflow
+- tensorflow_probability
 - matplotlib
+- pyaudio (you need to install portaudio19-dev(apt-get))
 
 ## How to save or restore your session in tensorflow
 ### How to save

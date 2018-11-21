@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
 '''
-誤差関数が出力層1ユニット目しか対応していない
-重みにあとから単位ブロック行列を掛けるのではなく、初めからそうしたい（勾配行列を変える？）
+[OK?(重みがブロック行列になっていればよいのでは？)]重みにあとから単位ブロック行列を掛けるのではなく、初めからそうしたい（勾配行列を変こえる？）
+
+リアルタイム入出力
 '''
 
 # my library
@@ -48,7 +49,7 @@ activation = tf.nn.tanh
 
 seq_len = 100
 
-epoch_size = 10
+epoch_size = 1000
 input_units = 2
 inner_units = 20
 output_units = 2
@@ -69,10 +70,10 @@ tau = 10
 def make_data(length, loop=0):
     # print('making data...')
 
-    sound1 = my.Sound.load_sound('../music/jinglebells.wav')
-    sound2 = my.Sound.load_sound('../music/ifudoudou.wav')
     sound1 = my.Sound.load_sound('../music/ifudoudou.wav')
     sound2 = my.Sound.load_sound('../music/jinglebells.wav')
+    sound1 = my.Sound.load_sound('../music/jinglebells.wav')
+    sound2 = my.Sound.load_sound('../music/ifudoudou.wav')
 
     sound1 = sound1[30000:]
     sound2 = sound2[30000:]
@@ -157,13 +158,13 @@ def inference(length):
             params['Wi'] = Wi
 
         with tf.name_scope('bi'):
-            bi = tf.Variable(weight(shape=[inner_units]), name='bi')
+            bi = tf.Variable(weight(shape=[1,inner_units]), name='bi')
             tf.summary.histogram('bi', bi)
             params['bi'] = bi
 
         # input: [None, input_units]
-        i = normalize(inputs)
-        fi = tf.matmul(i, Wi) + bi
+        in_norm = normalize(inputs)
+        fi = tf.matmul(in_norm, Wi) + bi
         sigm = tf.nn.sigmoid(fi)
 
     inner_output = set_innerlayers(sigm, inner_layers)
@@ -189,14 +190,14 @@ def inference(length):
             params['Wo'] = Wo
 
         with tf.name_scope('bo'):
-            bo = tf.Variable(weight(shape=[output_units]), name='bo')
+            bo = tf.Variable(weight(shape=[1, output_units]), name='bo')
             tf.summary.histogram('bo', bo)
             params['bo'] = bo
 
         fo = tf.matmul(inner_output, tf.multiply(Wo, Io)) + bo
         outputs = normalize(fo)
 
-    return inputs, outputs, params
+    return in_norm, inputs, outputs, params
 
 def get_lyapunov(seq, dt=1/seq_len):
     '''
@@ -216,49 +217,57 @@ def get_lyapunov(seq, dt=1/seq_len):
 
 
 def loss(inputs, outputs, length, mode):
-    with tf.name_scope('LOSS'):
-        print('input::{}'.format(inputs[:,0]))
-        print('output::{}'.format(outputs[:,0]))
+    # if mode==True: TE(y->x)
 
-        # Laypunov-Exponent
-        with tf.name_scope('Lyapunov-Exp'):
-            lyapunov = []
-            for i in range(output_units):
-                lyapunov.append(get_lyapunov(outputs[:,i]))
+    # Laypunov-Exponent
+    with tf.name_scope('Lyapunov'):
+        lyapunov = []
+        for i in range(output_units):
+            lyapunov.append(get_lyapunov(outputs[:,i]))
 
-        with tf.name_scope('TE-Loss'):
-            entropy = 0
-            for i in range(input_units):
-                in_data, out_data = inputs[:,i], outputs[:,0]
+    with tf.name_scope('TE-Loss'):
+        ic = info_content.info_content()
 
-                ic = info_content.info_content()
-                # TF(y->x)
-                en, pdf = ic.get_TE_for_tf4(
-                    tf.cond(mode, lambda:out_data, lambda:in_data),
-                    tf.cond(mode, lambda:in_data, lambda:out_data),
-                    seq_len)
-                entropy += en
-            print('entropy_shape: ', entropy)
+        output_units_ = tf.constant(0, shape=[output_units])
+        input_units_ = tf.constant(0, shape=[input_units])
 
-        return -entropy, lyapunov, pdf
+        x, x_units_, y, y_units_ = tf.cond(mode,
+                lambda:(outputs, output_units_, inputs, input_units_),
+                lambda:(inputs, input_units_, outputs, output_units_))
 
-        '''
-        with tf.name_scope('loss_lyapunov'):
-            # リアプノフ指数が増加するように誤差関数を設定
-            lyapunov = []
-            loss = []
-            for i in range(output_units):
-                lyapunov.append(get_lyapunov(outputs[:,i]))
-                # loss.append(1/(1+tf.exp(lyapunov[i])))
-                # loss.append(tf.exp(-lyapunov[i]))
-                # loss.append(-lyapunov[i])
+        x_units = int(x_units_.get_shape()[0])
+        y_units = int(y_units_.get_shape()[0])
+        print('x_units: {}, y_units: {}'.format(x_units, y_units))
 
-            # リアプノフ指数を取得(評価の際は最大リアプノフ指数をとる)
-            # return tf.reduce_sum(loss), lyapunov
-            return tf.reduce_max(loss), lyapunov
-            # return tf.reduce_min(loss), lyapunov
-            # return loss, lyapunov
-        '''
+        entropy = []
+        for i in range(x_units):
+            entropy_ = 0
+            for j in range(y_units):
+                x_, y_ = x[:,j], y[:,i]
+                # TE(y->x)
+                en, pdf = ic.get_TE_for_tf4(x_, y_, seq_len)
+                entropy_ += en
+            entropy.append(entropy_)
+
+        return -tf.reduce_min(entropy), lyapunov, pdf
+
+    '''
+    with tf.name_scope('loss_lyapunov'):
+        # リアプノフ指数が増加するように誤差関数を設定
+        lyapunov = []
+        loss = []
+        for i in range(output_units):
+            lyapunov.append(get_lyapunov(outputs[:,i]))
+            # loss.append(1/(1+tf.exp(lyapunov[i])))
+            # loss.append(tf.exp(-lyapunov[i]))
+            # loss.append(-lyapunov[i])
+
+        # リアプノフ指数を取得(評価の際は最大リアプノフ指数をとる)
+        # return tf.reduce_sum(loss), lyapunov
+        return tf.reduce_max(loss), lyapunov
+        # return tf.reduce_min(loss), lyapunov
+        # return loss, lyapunov
+    '''
 
 
 def train(error, update_params):
@@ -458,11 +467,12 @@ def main(_):
             Mode = tf.placeholder(dtype = tf.bool, name='Mode')
             mode = True
 
-        inputs, outputs, params = inference(seq_len)
+        norm_in, inputs, outputs, params = inference(seq_len)
         Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
 
-        error, lyapunov, pdf = loss(inputs, outputs, seq_len, Mode)
+        error, lyapunov, pdf = loss(norm_in, outputs, seq_len, Mode)
 
+        # Read PDFs
         dm, dmx, dmxx, dmxy = pdf['dm'], pdf['dmx'], pdf['dmxx'], pdf['dmxy']
         sampling = 10000
         bin_tau = 1/10
@@ -513,8 +523,8 @@ def main(_):
         
         ic = info_content.info_content() 
         
-        l_list, te_list = [], []
-        out_sound = []
+        l_list, te_list, time_list = [], [], []
+        out_sound1, out_sound2 = [], []
         in_color, out_color = 'r', 'b'
 
         for epoch in range(epoch_size):
@@ -523,25 +533,33 @@ def main(_):
             feed_dict = {inputs:data, Mode:mode}
 
             start = time.time()
-            # summary, out, error_val, l, d = sess.run([merged, outputs, error, lyapunov, dmxo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
-            wi, wo, out, error_val, l, dx, dxy = sess.run([Wi, Wo, outputs, error, lyapunov, dmxo, dmxyo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
-            # sess.run([ops], run_metadata=run_metadata, options=run_options)
+            wi, wo, in_, out, error_val, l = sess.run([Wi, Wo, norm_in, outputs, error, lyapunov], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+
+            # run for pdf
+            dx, dxy = sess.run([dmxo, dmxyo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+
             summary, t, gradients = sess.run([merged, train_step, grad], feed_dict)
             end = time.time()
-            indata, outdata = [data[:,0], out[:,0]]
-            out_sound.extend(out[:,0])
+            indata, outdata = [in_[:,0], out[:,0]]
+            out_sound1.extend(out[:,0])
+            out_sound2.extend(out[:,1])
             print('wi: ', wi[:,0:10])
             print('wo: ', wo[0:10,:])
             print('in: ', indata[0:10])
             print('out: ', outdata[0:10])
             # print('grad: ', gradients[0][0:10])
-            print('grad: ', gradients)
+            for (g, v) in gradients:
+                print('grad: ', g[0][0:10])
 
             l_list.append(l[0])
             te_list.append(ic.get_TE2(outdata, indata))
 
+            elapsed_time = end-start
+            time_list.append(elapsed_time)
+
             if epoch%1 == 0:
-                print("elapsed_time: ", int((end-start)*1000), '[sec]')
+                print("elapsed_time: {}sec/epoch".format(int(elapsed_time)))
+                print("Estimated-reminded-time: {}sec/{}sec".format(int(sum(time_list)), int(np.mean(time_list)*epoch_size)))
                 print("error:{}".format(error_val))
                 print("Transfer-Entropy: ", ic.get_TE2(outdata, indata))
                 # print(d)
@@ -554,12 +572,12 @@ def main(_):
                 out2 = out1[int(seq_len/2):int(seq_len/2)+100]
                 '''
 
-                data1, data2, out1, out2 = data[:,0], data[:,1], out[:,0], out[:,1]
+                in1, in2, out1, out2 = in_[:,0], in_[:,1], out[:,0], out[:,1]
 
                 plt.figure()
                 plt.title('time-input-graph(epoch:{})'.format(epoch))
-                plt.plot(range(len(data1)), data1, c='r', lw=1, label='input1')
-                plt.plot(range(len(data2)), data2, c='b', lw=1, label='input2')
+                plt.plot(range(len(in1)), in1, c='r', lw=1, label='input1')
+                plt.plot(range(len(in2)), in2, c='b', lw=1, label='input2')
                 plt.legend(loc=2)
 
                 plt.figure()
@@ -568,23 +586,19 @@ def main(_):
                 plt.plot(range(len(out2)), out2, c='b', lw=1, label='output2')
                 plt.legend(loc=2)
 
-                '''
-                plt.figure()
-                plt.title('delayed-2Dgraph(epoch:{})'.format(epoch))
-                plt.plot(data1[:-tau], data1[tau:], c=in_color, lw=1, label='input')
-                plt.plot(out1[:-tau], out1[tau:], c=out_color, lw=1, label='output')
-                plt.legend(loc=2)
+                if True:
+                    plt.figure()
+                    plt.title('delayed-2Dgraph(epoch:{})'.format(epoch))
+                    plt.plot(in1[:-tau], in1[tau:], c=in_color, lw=1, label='input')
+                    plt.plot(out1[:-tau], out1[tau:], c=out_color, lw=1, label='output')
+                    plt.legend(loc=2)
 
-                fig = plt.figure()
-                ax = fig.add_subplot(111, projection='3d')
-                ax.set_title('delayed-out-3Dgraph(epoch:{})'.format(epoch))
-                ax.scatter3D(data1[:-2*tau],data1[tau:-tau],data1[2*tau:], c=in_color, label='input')
-                ax.scatter3D(out1[:-2*tau],out1[tau:-tau],out1[2*tau:], c=out_color, label='output')
-                plt.legend(loc=2)
-                '''
-
-
-            
+                    fig = plt.figure()
+                    ax = fig.add_subplot(111, projection='3d')
+                    ax.set_title('delayed-out-3Dgraph(epoch:{})'.format(epoch))
+                    ax.scatter3D(in1[:-2*tau],in1[tau:-tau],in1[2*tau:], c=in_color, label='input')
+                    ax.scatter3D(out1[:-2*tau],out1[tau:-tau],out1[2*tau:], c=out_color, label='output')
+                    plt.legend(loc=2)
 
             # print("output:{}".format(out))
             # print("lyapunov:{}".format(sess.run(tf.reduce_max(error_val))))
@@ -599,12 +613,18 @@ def main(_):
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
 
         sampling_freq = 14700
-        my.Sound.save_sound((np.array(out_sound)-0.5)*40000, '../music/chaos.wav', sampling_freq)
+        my.Sound.save_sound((np.array(out_sound1)-0.5)*40000, '../music/chaos1.wav', sampling_freq)
+        my.Sound.save_sound((np.array(out_sound2)-0.5)*40000, '../music/chaos2.wav', sampling_freq)
 
         if False:
             plt.figure()
             plt.title('Transfer Entropy')
             plt.plot(range(len(te_list)), te_list)
+
+        if True:
+            plt.figure()
+            plt.title('Disposal Time')
+            plt.plot(range(len(time_list)), time_list)
 
 
         # 混合ベイズ分布ができているか確認
