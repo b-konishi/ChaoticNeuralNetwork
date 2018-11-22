@@ -194,12 +194,12 @@ def inference(length):
             tf.summary.histogram('bo', bo)
             params['bo'] = bo
 
-        fo = tf.matmul(inner_output, tf.multiply(Wo, Io)) + bo
+        fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
         outputs = normalize(fo)
 
     return in_norm, inputs, outputs, params
 
-def get_lyapunov(seq, dt=1/seq_len):
+def tf_get_lyapunov(seq, dt=1/seq_len):
     '''
     本来リアプノフ指数はmean(log(f'))だが、f'<<0の場合に-Infとなってしまうため、
     mean(log(1+f'))とする。しかし、それだとこの式ではカオス性を持つかわからなくなってしまう。
@@ -219,11 +219,13 @@ def get_lyapunov(seq, dt=1/seq_len):
 def loss(inputs, outputs, length, mode):
     # if mode==True: TE(y->x)
 
+    '''
     # Laypunov-Exponent
     with tf.name_scope('Lyapunov'):
         lyapunov = []
         for i in range(output_units):
-            lyapunov.append(get_lyapunov(outputs[:,i]))
+            lyapunov.append(tf_get_lyapunov(outputs[:,i]))
+    '''
 
     with tf.name_scope('TE-Loss'):
         ic = info_content.info_content()
@@ -249,7 +251,7 @@ def loss(inputs, outputs, length, mode):
                 entropy_ += en
             entropy.append(entropy_)
 
-        return -tf.reduce_min(entropy), lyapunov, pdf
+        return -tf.reduce_min(entropy), pdf
 
     '''
     with tf.name_scope('loss_lyapunov'):
@@ -470,7 +472,7 @@ def main(_):
         norm_in, inputs, outputs, params = inference(seq_len)
         Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
 
-        error, lyapunov, pdf = loss(norm_in, outputs, seq_len, Mode)
+        error, pdf = loss(norm_in, outputs, seq_len, Mode)
 
         # Read PDFs
         dm, dmx, dmxx, dmxy = pdf['dm'], pdf['dmx'], pdf['dmxx'], pdf['dmxy']
@@ -484,11 +486,13 @@ def main(_):
         dmxyo = dmxy.prob(ixy[:,1:])
 
         tf.summary.scalar('error', error)
-        train_step, grad = train(error, [Wi, bi, Wo, bo])
+        train_step, grad = train(error, [Wi, bi, Wo])
 
+        '''
         with tf.name_scope('lyapunov'):
             for i in range(output_units):
                 tf.summary.scalar('lyapunov'+str(i), lyapunov[i])
+        '''
 
         # Tensorboard logfile
         if tf.gfile.Exists(log_path):
@@ -523,6 +527,11 @@ def main(_):
         
         ic = info_content.info_content() 
         
+        lcluster = 1000
+        epoch_cluster = int(lcluster/seq_len)+1
+        out_cluster, lyapunov = [], []
+        dt = 1/lcluster
+
         l_list, te_list, time_list = [], [], []
         out_sound1, out_sound2 = [], []
         in_color, out_color = 'r', 'b'
@@ -533,13 +542,14 @@ def main(_):
             feed_dict = {inputs:data, Mode:mode}
 
             start = time.time()
-            wi, wo, in_, out, error_val, l = sess.run([Wi, Wo, norm_in, outputs, error, lyapunov], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+            wi, wo, in_, out, error_val = sess.run([Wi, Wo, norm_in, outputs, error], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
 
             # run for pdf
             dx, dxy = sess.run([dmxo, dmxyo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
 
             summary, t, gradients = sess.run([merged, train_step, grad], feed_dict)
             end = time.time()
+
             indata, outdata = [in_[:,0], out[:,0]]
             out_sound1.extend(out[:,0])
             out_sound2.extend(out[:,1])
@@ -551,15 +561,28 @@ def main(_):
             for (g, v) in gradients:
                 print('grad: ', g[0][0:10])
 
-            l_list.append(l[0])
+            # Lyapunov
+            out_cluster.append(outdata)
+            if epoch % epoch_cluster == 0 or True:
+                print('Measuring lyapunov...')
+                diff = np.abs(np.diff(out_cluster))
+                lyapunov.append(np.mean(np.log1p(diff/dt)-np.log(2.0)))
+                out_cluster = []
+                
+
+            # l_list.append(l[0])
             te_list.append(ic.get_TE2(outdata, indata))
 
             elapsed_time = end-start
             time_list.append(elapsed_time)
 
             if epoch%1 == 0:
+                total_time = np.mean(time_list)*epoch_size
+                cumulative_time = sum(time_list)
+                remineded_time = total_time - cumulative_time
+
                 print("elapsed_time: {}sec/epoch".format(int(elapsed_time)))
-                print("Estimated-reminded-time: {}sec/{}sec".format(int(sum(time_list)), int(np.mean(time_list)*epoch_size)))
+                print("Estimated-reminded-time: {}sec({}sec/{}sec)".format(int(remineded_time), int(cumulative_time), int(total_time)))
                 print("error:{}".format(error_val))
                 print("Transfer-Entropy: ", ic.get_TE2(outdata, indata))
                 # print(d)
@@ -624,7 +647,13 @@ def main(_):
         if True:
             plt.figure()
             plt.title('Disposal Time')
-            plt.plot(range(len(time_list)), time_list)
+            plt.plot(range(len(time_list)-1), time_list[1:])
+
+        if True:
+            plt.figure()
+            plt.title('Lyapunov Exponent')
+            plt.plot(range(len(lyapunov)), lyapunov)
+            print('Mean-Lyapunov-Value: ', np.mean(lyapunov))
 
 
         # 混合ベイズ分布ができているか確認

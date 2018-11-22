@@ -373,7 +373,7 @@ class info_content():
             y = tf.reshape(y, [])
             entropy = entropy + tf.cond(tf.is_nan(y), lambda:0., lambda:y)
         '''
-        
+
         print('complete reading')
 
         return entropy, pdf
