@@ -49,7 +49,7 @@ activation = tf.nn.tanh
 
 seq_len = 100
 
-epoch_size = 1000
+epoch_size = 100
 input_units = 2
 inner_units = 20
 output_units = 2
@@ -199,7 +199,7 @@ def inference(length):
 
     return in_norm, inputs, outputs, params
 
-def tf_get_lyapunov(seq, dt=1/seq_len):
+def tf_get_lyapunov(seq):
     '''
     本来リアプノフ指数はmean(log(f'))だが、f'<<0の場合に-Infとなってしまうため、
     mean(log(1+f'))とする。しかし、それだとこの式ではカオス性を持つかわからなくなってしまう。
@@ -210,6 +210,7 @@ def tf_get_lyapunov(seq, dt=1/seq_len):
     mean(log(1+f')-log(2))とする（0以上ならばカオス性を持つという性質は変わらない）
     '''
     
+    dt = 1/len(seq)
     diff = tf.abs(seq[1:]-seq[:-1])
     lyapunov = tf.reduce_mean(tf.log1p(diff/dt)-tf.log(tf.cast(2.0, tf.float32)))
 
@@ -250,8 +251,9 @@ def loss(inputs, outputs, length, mode):
                 en, pdf = ic.get_TE_for_tf4(x_, y_, seq_len)
                 entropy_ += en
             entropy.append(entropy_)
+            tf.summary.scalar('entropy{}'.format(i), entropy[i])
 
-        return -tf.reduce_min(entropy), pdf
+        return -tf.reduce_mean(entropy), pdf
 
     '''
     with tf.name_scope('loss_lyapunov'):
@@ -276,7 +278,7 @@ def train(error, update_params):
     # return tf.train.GradientDescentOptimizer(learning_rate=0.001).minimize(error)
     with tf.name_scope('training'):
         # opt = tf.train.GradientDescentOptimizer(learning_rate=0.001)
-        opt = tf.train.AdamOptimizer(1.0)
+        opt = tf.train.AdamOptimizer(0.001)
         grads_ = opt.compute_gradients(error, var_list=update_params)
         # grads_ = [(grad1,var1),(grad2,var2),...]
 
@@ -284,19 +286,6 @@ def train(error, update_params):
         for g in grads_:
             g_ = tf.where(tf.is_nan(g[0]), tf.zeros_like(g[0]), g[0])
             grads.append((g_, g[1]))
-
-
-        '''
-        grad_tuple = grads[0]
-        g = (tf.where(tf.is_nan(grad[0]), tf.zeros_like(grad[0]), grad[0]),)
-        g += (grad[1],)
-
-        grad2 = grads[1]
-        g2 = (tf.where(tf.is_nan(grad2[0]), tf.zeros_like(grad2[0]), grad2[0]),)
-        g2 += (grad2[1],)
-
-        grads2 = [g, g2]
-        '''
 
         # training = opt.minimize(grads, var_list=update_params)
         training = opt.apply_gradients(grads)
@@ -460,6 +449,14 @@ def opt(x):
 
     return osess.run(error)
 
+def np_get_lyapunov(seq):
+    # print('Measuring lyapunov...')
+    dt = 1/len(seq)
+    diff = np.abs(np.diff(seq))
+    lyapunov = np.mean(np.log1p(diff/dt)-np.log(2.0))
+
+    return lyapunov
+
 def main(_):
 
     if MODE == 'train':
@@ -527,8 +524,9 @@ def main(_):
         
         ic = info_content.info_content() 
         
-        lcluster = 1000
-        epoch_cluster = int(lcluster/seq_len)+1
+        lcluster = 500
+        epoch_cluster = math.ceil(lcluster/seq_len)
+        print('epoch_cluster: ', epoch_cluster)
         out_cluster, lyapunov = [], []
         dt = 1/lcluster
 
@@ -559,14 +557,14 @@ def main(_):
             print('out: ', outdata[0:10])
             # print('grad: ', gradients[0][0:10])
             for (g, v) in gradients:
-                print('grad: ', g[0][0:10])
+                print('grad: ', g[0][0:5])
 
             # Lyapunov
-            out_cluster.append(outdata)
-            if epoch % epoch_cluster == 0 or True:
-                print('Measuring lyapunov...')
-                diff = np.abs(np.diff(out_cluster))
-                lyapunov.append(np.mean(np.log1p(diff/dt)-np.log(2.0)))
+            out_cluster.extend(outdata)
+            print('len(out_cluster)', len(out_cluster))
+            print('len(outdata)', len(outdata))
+            if epoch != 0 and epoch % epoch_cluster == 0:
+                lyapunov.append(np_get_lyapunov(out_cluster))
                 out_cluster = []
                 
 
@@ -611,11 +609,18 @@ def main(_):
 
                 if True:
                     plt.figure()
-                    plt.title('delayed-2Dgraph(epoch:{})'.format(epoch))
-                    plt.plot(in1[:-tau], in1[tau:], c=in_color, lw=1, label='input')
-                    plt.plot(out1[:-tau], out1[tau:], c=out_color, lw=1, label='output')
+                    plt.title('delayed-input-2Dgraph(epoch:{})'.format(epoch))
+                    plt.plot(in1[:-tau], in1[tau:], c='r', lw=1, label='input')
+                    plt.plot(in2[:-tau], in2[tau:], c='b', lw=1, label='input')
                     plt.legend(loc=2)
 
+                    plt.figure()
+                    plt.title('delayed-out-2Dgraph(epoch:{})'.format(epoch))
+                    plt.plot(out1[:-tau], out1[tau:], c='r', lw=1, label='output')
+                    plt.plot(out2[:-tau], out2[tau:], c='b', lw=1, label='output')
+                    plt.legend(loc=2)
+
+                if False:
                     fig = plt.figure()
                     ax = fig.add_subplot(111, projection='3d')
                     ax.set_title('delayed-out-3Dgraph(epoch:{})'.format(epoch))
@@ -644,7 +649,7 @@ def main(_):
             plt.title('Transfer Entropy')
             plt.plot(range(len(te_list)), te_list)
 
-        if True:
+        if False:
             plt.figure()
             plt.title('Disposal Time')
             plt.plot(range(len(time_list)-1), time_list[1:])
@@ -654,6 +659,15 @@ def main(_):
             plt.title('Lyapunov Exponent')
             plt.plot(range(len(lyapunov)), lyapunov)
             print('Mean-Lyapunov-Value: ', np.mean(lyapunov))
+
+
+            lcluster = 500
+            lyapunov_sin = (np_get_lyapunov(np.sin(np.linspace(0, 1, lcluster))))
+            lyapunov_random = (np_get_lyapunov(np.random.rand(lcluster)))
+            print('Lyapunov-sin: ', lyapunov_sin)
+            print('Lyapunov-random: ', lyapunov_random)
+
+
 
 
         # 混合ベイズ分布ができているか確認

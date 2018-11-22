@@ -311,6 +311,8 @@ class info_content():
         scale = (1/n)/(sigma_rate*2)
         scale = .1
 
+        bin_tau = 10
+
         dm = tfd.Independent(
                 tfd.MixtureSameFamily(
                     mixture_distribution=tfd.Categorical(probs=[1/n]*n),
@@ -346,16 +348,10 @@ class info_content():
         # WARNING: memory-occupated-size=sampling^3
         sampling = 20
 
-        # TODO: bin_tauの値によっては勾配がnan/0になる
-        bin_tau = sampling/10
-        bin_tau = 0.1
-        print('bin_tau:{}, scale:{}'.format(bin_tau, scale))
+        i = np.reshape(np.linspace(0,1,sampling), [sampling,1])
+        idx = np.concatenate(list(itertools.product(i, repeat=3)), axis=1).T
 
-        ix = np.reshape(np.linspace(0,1,sampling), [sampling,1])
-        iy = np.reshape(np.linspace(0,1,sampling), [sampling,1])
-        ixy = np.concatenate(list(itertools.product(ix+bin_tau,ix,iy)), axis=1).T
-
-        p, px, pxx, pxy = dm.prob(ixy), dmx.prob(ixy[:,1]), dmxx.prob(ixy[:,:-1]), dmxy.prob(ixy[:,1:])
+        p, px, pxx, pxy = dm.prob(idx), dmx.prob(idx[:,1]), dmxx.prob(idx[:,:-1]), dmxy.prob(idx[:,1:])
 
         y = p * tf.log((p*px)/(pxy*pxx) + 1e-30)
         y = tf.where(tf.is_nan(y), tf.zeros_like(y), y)
