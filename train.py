@@ -26,9 +26,11 @@ tfd = tfp.distributions
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+'''
 # Baysian Optimization
 import GPy
 import GPyOpt
+'''
 
 model_path = '../model/'
 log_path = '../logdir'
@@ -47,7 +49,7 @@ is_plot = True
 
 activation = tf.nn.tanh
 
-seq_len = 100
+seq_len = 10
 
 epoch_size = 100
 input_units = 2
@@ -457,7 +459,7 @@ def np_get_lyapunov(seq):
 
     return lyapunov
 
-def main(_):
+def learning_():
 
     if MODE == 'train':
         sess = tf.InteractiveSession()
@@ -588,26 +590,22 @@ def main(_):
 
             if is_plot and epoch%(epoch_size-1) == 0:
 
-                '''
-                data2 = data1[int(seq_len/2):int(seq_len/2)+100]
-                out2 = out1[int(seq_len/2):int(seq_len/2)+100]
-                '''
-
                 in1, in2, out1, out2 = in_[:,0], in_[:,1], out[:,0], out[:,1]
 
-                plt.figure()
-                plt.title('time-input-graph(epoch:{})'.format(epoch))
-                plt.plot(range(len(in1)), in1, c='r', lw=1, label='input1')
-                plt.plot(range(len(in2)), in2, c='b', lw=1, label='input2')
-                plt.legend(loc=2)
+                if False:
+                    plt.figure()
+                    plt.title('time-input-graph(epoch:{})'.format(epoch))
+                    plt.plot(range(len(in1)), in1, c='r', lw=1, label='input1')
+                    plt.plot(range(len(in2)), in2, c='b', lw=1, label='input2')
+                    plt.legend(loc=2)
 
-                plt.figure()
-                plt.title('time-output-graph(epoch:{})'.format(epoch))
-                plt.plot(range(len(out1)), out1, c='r', lw=1, label='output1')
-                plt.plot(range(len(out2)), out2, c='b', lw=1, label='output2')
-                plt.legend(loc=2)
+                    plt.figure()
+                    plt.title('time-output-graph(epoch:{})'.format(epoch))
+                    plt.plot(range(len(out1)), out1, c='r', lw=1, label='output1')
+                    plt.plot(range(len(out2)), out2, c='b', lw=1, label='output2')
+                    plt.legend(loc=2)
 
-                if True:
+                if False:
                     plt.figure()
                     plt.title('delayed-input-2Dgraph(epoch:{})'.format(epoch))
                     plt.plot(in1[:-tau], in1[tau:], c='r', lw=1, label='input')
@@ -628,14 +626,6 @@ def main(_):
                     ax.scatter3D(out1[:-2*tau],out1[tau:-tau],out1[2*tau:], c=out_color, label='output')
                     plt.legend(loc=2)
 
-            # print("output:{}".format(out))
-            # print("lyapunov:{}".format(sess.run(tf.reduce_max(error_val))))
-
-            '''
-            graph = run_metadata.partition_graphs[0]
-            writer = tf.summary.FileWriter(logdir=log_path, graph=graph)
-            writer.flush()
-            '''
             writer.add_summary(summary, epoch)
 
         # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
@@ -660,15 +650,11 @@ def main(_):
             plt.plot(range(len(lyapunov)), lyapunov)
             print('Mean-Lyapunov-Value: ', np.mean(lyapunov))
 
-
             lcluster = 500
             lyapunov_sin = (np_get_lyapunov(np.sin(np.linspace(0, 1, lcluster))))
             lyapunov_random = (np_get_lyapunov(np.random.rand(lcluster)))
             print('Lyapunov-sin: ', lyapunov_sin)
             print('Lyapunov-random: ', lyapunov_random)
-
-
-
 
         # 混合ベイズ分布ができているか確認
         if False:
@@ -702,32 +688,258 @@ def main(_):
         out = np.array(out)
 
         if is_plot:
-            pass
-            '''
-            plt.figure()
-            data = (data[:,0]-min(data[:,0]))/(max(data[:,0])-min(data[:,0]))
-            out = (out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0]))
-
-            plt.plot(range(seq_len), data, c='b', lw=1)
-            plt.plot(range(seq_len), out, c='r', lw=1)
-
-            plt.figure()
-            plt.scatter(range(seq_len), out[:,1], c='r', s=1)
-            random = np.random.rand(seq_len,1)
-
-            plt.figure()
-            plt.title('time-random-graph(epoch:{})'.format(epoch))
-            plt.plot(range(100), random[int(seq_len/2):int(seq_len/2+100)], c='b', lw=1)
-
-            plt.figure()
-            plt.title('delayed-random-graph(epoch:{})'.format(epoch))
-            plt.plot(random[:-tau], random[tau:], c='r', lw=0.1)
             plt.show()
+
+        # sess.close()
+
+    elif MODE == 'predict':
+        predict()
+
+    elif MODE == 'opt':
+        bounds = [{'name': 'kf',    'type': 'continuous',  'domain': (0.0, 100.0)},
+                  {'name': 'kr',    'type': 'continuous',  'domain': (0.0, 100.0)},
+                  {'name': 'alpha', 'type': 'continuous',  'domain': (0.0, 100.0)}]
+
+        # Do Presearch
+        opt_mnist = GPyOpt.methods.BayesianOptimization(f=opt, domain=bounds)
+
+        # Search Optimized Parameter
+        opt_mnist.run_optimization(max_iter=10)
+        print("optimized parameters: {0}".format(opt_mnist.x_opt))
+        print("optimized loss: {0}".format(opt_mnist.fx_opt))
+
+def learning():
+
+    if MODE == 'train':
+        sess = tf.InteractiveSession()
+
+        with tf.name_scope('Mode'):
+            Mode = tf.placeholder(dtype = tf.bool, name='Mode')
+            mode = True
+
+        norm_in, inputs, outputs, params = inference(seq_len)
+        Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
+
+        error, pdf = loss(norm_in, outputs, seq_len, Mode)
+
+        # Read PDFs
+        dm, dmx, dmxx, dmxy = pdf['dm'], pdf['dmx'], pdf['dmxx'], pdf['dmxy']
+        sampling = 10000
+        bin_tau = 1/10
+        # x = np.reshape(np.linspace(-0.5,1.5,10000), [10000,1])
+        ix = np.reshape(np.linspace(0,1,sampling), [sampling,1])
+        iy = np.reshape(np.linspace(0,1,sampling), [sampling,1])
+        ixy = np.concatenate((ix+bin_tau,ix,iy), axis=1)
+        dmxo = dmx.prob(ixy[:,1])
+        dmxyo = dmxy.prob(ixy[:,1:])
+
+        tf.summary.scalar('error', error)
+        train_step, grad = train(error, [Wi, bi, Wo])
+
+        '''
+        with tf.name_scope('lyapunov'):
+            for i in range(output_units):
+                tf.summary.scalar('lyapunov'+str(i), lyapunov[i])
+        '''
+
+        # Tensorboard logfile
+        if tf.gfile.Exists(log_path):
+            tf.gfile.DeleteRecursively(log_path)
+        writer = tf.summary.FileWriter(log_path, sess.graph)
+
+        run_options = tf.RunOptions(output_partition_graphs=True)
+        run_metadata = tf.RunMetadata()
+
+        init_op = tf.global_variables_initializer()
+        sess.run(init_op)
+
+        # For Debug
+        # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+
+        merged = tf.summary.merge_all()
+
+        
+        '''
+        # confirm
+        data = make_data(seq_len, loop=0)
+        feed_dict = {inputs:data}
+        d, out = sess.run([dmxo, outputs], feed_dict=feed_dict)
+        # print(out)
+        # print((out[:,0]-min(out[:,0]))/(max(out[:,0])-min(out[:,0])))
+        plt.figure()
+        # plt.scatter(d[:,0], d[:,1], s=1)
+        plt.plot(x, d, lw=1)
+        if is_plot:
+            plt.show()
+        '''
+        
+        ic = info_content.info_content() 
+        
+        lcluster = 500
+        epoch_cluster = math.ceil(lcluster/seq_len)
+        print('epoch_cluster: ', epoch_cluster)
+        out_cluster, lyapunov = [], []
+        dt = 1/lcluster
+
+        l_list, te_list, time_list = [], [], []
+        out_sound1, out_sound2 = [], []
+        in_color, out_color = 'r', 'b'
+
+        for epoch in range(epoch_size):
+            print('\n[epoch:{}-times]'.format(epoch))
+            data = make_data(seq_len, loop=epoch)
+            feed_dict = {inputs:data, Mode:mode}
+
+            start = time.time()
+            wi, wo, in_, out, error_val = sess.run([Wi, Wo, norm_in, outputs, error], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+
+            # run for pdf
+            dx, dxy = sess.run([dmxo, dmxyo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+
+            summary, t, gradients = sess.run([merged, train_step, grad], feed_dict)
+            end = time.time()
+
+            indata, outdata = [in_[:,0], out[:,0]]
+            out_sound1.extend(out[:,0])
+            out_sound2.extend(out[:,1])
+            print('wi: ', wi[:,0:10])
+            print('wo: ', wo[0:10,:])
+            print('in: ', indata[0:10])
+            print('out: ', outdata[0:10])
+            # print('grad: ', gradients[0][0:10])
+            for (g, v) in gradients:
+                print('grad: ', g[0][0:5])
+
+            # Lyapunov
+            out_cluster.extend(outdata)
+            print('len(out_cluster)', len(out_cluster))
+            print('len(outdata)', len(outdata))
+            if epoch != 0 and epoch % epoch_cluster == 0:
+                lyapunov.append(np_get_lyapunov(out_cluster))
+                out_cluster = []
+                
+
+            # l_list.append(l[0])
+            te_list.append(ic.get_TE2(outdata, indata))
+
+            elapsed_time = end-start
+            time_list.append(elapsed_time)
+
+            if epoch%1 == 0:
+                total_time = np.mean(time_list)*epoch_size
+                cumulative_time = sum(time_list)
+                remineded_time = total_time - cumulative_time
+
+                print("elapsed_time: {}sec/epoch".format(int(elapsed_time)))
+                print("Estimated-reminded-time: {}sec({}sec/{}sec)".format(int(remineded_time), int(cumulative_time), int(total_time)))
+                print("error:{}".format(error_val))
+                print("Transfer-Entropy: ", ic.get_TE2(outdata, indata))
+                # print(d)
+                # print(out)
+
+            if is_plot and epoch%(epoch_size-1) == 0:
+
+                in1, in2, out1, out2 = in_[:,0], in_[:,1], out[:,0], out[:,1]
+
+                if False:
+                    plt.figure()
+                    plt.title('time-input-graph(epoch:{})'.format(epoch))
+                    plt.plot(range(len(in1)), in1, c='r', lw=1, label='input1')
+                    plt.plot(range(len(in2)), in2, c='b', lw=1, label='input2')
+                    plt.legend(loc=2)
+
+                    plt.figure()
+                    plt.title('time-output-graph(epoch:{})'.format(epoch))
+                    plt.plot(range(len(out1)), out1, c='r', lw=1, label='output1')
+                    plt.plot(range(len(out2)), out2, c='b', lw=1, label='output2')
+                    plt.legend(loc=2)
+
+                if False:
+                    plt.figure()
+                    plt.title('delayed-input-2Dgraph(epoch:{})'.format(epoch))
+                    plt.plot(in1[:-tau], in1[tau:], c='r', lw=1, label='input')
+                    plt.plot(in2[:-tau], in2[tau:], c='b', lw=1, label='input')
+                    plt.legend(loc=2)
+
+                    plt.figure()
+                    plt.title('delayed-out-2Dgraph(epoch:{})'.format(epoch))
+                    plt.plot(out1[:-tau], out1[tau:], c='r', lw=1, label='output')
+                    plt.plot(out2[:-tau], out2[tau:], c='b', lw=1, label='output')
+                    plt.legend(loc=2)
+
+                if False:
+                    fig = plt.figure()
+                    ax = fig.add_subplot(111, projection='3d')
+                    ax.set_title('delayed-out-3Dgraph(epoch:{})'.format(epoch))
+                    ax.scatter3D(in1[:-2*tau],in1[tau:-tau],in1[2*tau:], c=in_color, label='input')
+                    ax.scatter3D(out1[:-2*tau],out1[tau:-tau],out1[2*tau:], c=out_color, label='output')
+                    plt.legend(loc=2)
+
+            writer.add_summary(summary, epoch)
+
+        # plt.plot(range(epoch_size), (l_list), c='b', lw=1)
+
+        sampling_freq = 14700
+        my.Sound.save_sound((np.array(out_sound1)-0.5)*40000, '../music/chaos1.wav', sampling_freq)
+        my.Sound.save_sound((np.array(out_sound2)-0.5)*40000, '../music/chaos2.wav', sampling_freq)
+
+        if False:
+            plt.figure()
+            plt.title('Transfer Entropy')
+            plt.plot(range(len(te_list)), te_list)
+
+        if False:
+            plt.figure()
+            plt.title('Disposal Time')
+            plt.plot(range(len(time_list)-1), time_list[1:])
+
+        if True:
+            plt.figure()
+            plt.title('Lyapunov Exponent')
+            plt.plot(range(len(lyapunov)), lyapunov)
+            print('Mean-Lyapunov-Value: ', np.mean(lyapunov))
+
+            lcluster = 500
+            lyapunov_sin = (np_get_lyapunov(np.sin(np.linspace(0, 1, lcluster))))
+            lyapunov_random = (np_get_lyapunov(np.random.rand(lcluster)))
+            print('Lyapunov-sin: ', lyapunov_sin)
+            print('Lyapunov-random: ', lyapunov_random)
+
+        # 混合ベイズ分布ができているか確認
+        if False:
+            plt.figure()
+            plt.title('pdf: p(x)')
+            # plt.scatter(dx[:,0], dx[:,1], s=1)
+            plt.plot(ixy[:,1], dx, lw=2)
+
+            print(np.shape(dxy))
+            print(np.shape(ixy))
             '''
+            fig = plt.figure()
+            ax = fig.add_subplot(111,projection='3d')
+            ax.set_title('pdf: p(x,y)')
+            ax.scatter3D(ixy[:,1], ixy[:,2], dxy)
+            '''
+
+        if is_save:
+            '''
+            # 特定の変数だけ保存するときに使用
+            train_vars = tf.trainable_variables()
+            '''
+            saver = tf.train.Saver()
+            saver.save(sess, model_path + 'model.ckpt')
+
+            '''
+            saver.restore(sess, tf.train.latest_checkpoint(model_path))
+            print(sess.run(Wi))
+            '''
+        # print("output:{}".format(out))
+        out = np.array(out)
+
         if is_plot:
             plt.show()
 
-        sess.close()
+        # sess.close()
 
     elif MODE == 'predict':
         predict()
@@ -747,6 +959,103 @@ def main(_):
 
             
 if __name__ == "__main__":
-    tf.app.run()
+    sessA = tf.InteractiveSession()
+    sessB = tf.InteractiveSession()
+
+    with tf.name_scope('Mode'):
+        Mode = tf.placeholder(dtype = tf.bool, name='Mode')
+
+    norm_in, inputs, outputs, params = inference(seq_len)
+    Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
+
+    error, pdf = loss(norm_in, outputs, seq_len, Mode)
+    tf.summary.scalar('error', error)
+    train_step, grad = train(error, [Wi, bi, Wo])
+
+    merged = tf.summary.merge_all()
+
+    # Tensorboard logfile
+    log_pathA = '../Alogdir'
+    log_pathB = '../Blogdir'
+
+    if tf.gfile.Exists(log_pathA):
+        tf.gfile.DeleteRecursively(log_pathA)
+    writerA = tf.summary.FileWriter(log_pathA, sessA.graph)
+
+    if tf.gfile.Exists(log_pathB):
+        tf.gfile.DeleteRecursively(log_pathB)
+    writerB = tf.summary.FileWriter(log_pathB, sessB.graph)
+
+
+    sessA.run(tf.global_variables_initializer())
+    sessB.run(tf.global_variables_initializer())
+
+    # fig, ax = plt.subplots(1, 1)
+    fig = plt.figure(figsize=(10,6))
+    # plt.legend(['A', 'B'],loc=2)
+    # plt.xlim([0,1])
+    # plt.ylim([0,1])
+
+    outB = make_data(seq_len)
+    # True: Following, False: Creative
+    modeA = True
+    modeB = False
+    epoch_size = 100
+    seq_len = 10
+
+    trajectoryA = []
+    trajectoryB = []
+    for epoch in range(epoch_size):
+        print('epoch: ', epoch)
+
+        if epoch%10 == 0:
+            modeA, modeB = modeB, modeA
+
+        feed_dictA = {inputs:outB, Mode:modeA}
+
+        outA = sessA.run(outputs, feed_dict=feed_dictA)
+        
+        feed_dictB = {inputs:outA, Mode:modeB}
+        outB = sessB.run(outputs, feed_dict=feed_dictB)
+
+        summaryA, _ = sessA.run([merged, train_step], feed_dictA)
+        summaryB, _ = sessB.run([merged, train_step], feed_dictB)
+
+        writerA.add_summary(summaryA, epoch)
+        writerB.add_summary(summaryB, epoch)
+
+        print('[A] mode={}, value={}'.format(modeA, np.array(outA[0])-0.5))
+        print('[B] mode={}, value={}'.format(modeB, np.array(outB[0])-0.5))
+
+        for i in range(seq_len):
+            trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
+            trajectoryB.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outB[i])-0.5])
+
+            plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-r', lw=0.1, label='A')
+            plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-b', lw=0.1, label='B')
+            plt.pause(0.01)
+
+    print('Finish')
+    plt.show()
+
+
+    # 描画データを更新するときにplot関数を使うと
+    # lineオブジェクトが都度増えてしまうので，注意．
+    #
+    # 一番楽なのは上記で受け取ったlinesに対して
+    # set_data()メソッドで描画データを更新する方法．
+    # lines.set_data(x, y)
+    # plt.plot([-1,-1],[1,1], c='r')
+    # plt.plot([-1,-1],[1,1],)
+
+    # set_data()を使うと軸とかは自動設定されないっぽいので，
+    # 今回の例だとあっという間にsinカーブが描画範囲からいなくなる．
+    # そのためx軸の範囲は適宜修正してやる必要がある．
+    # ax.set_xlim((x.min(), x.max()))
+
+    
+
+
+    # tf.app.run()
 
 
