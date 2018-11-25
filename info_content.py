@@ -292,7 +292,8 @@ class info_content():
         Entropy = tf.Variable(0, dtype=tf.float64, name='Entropy')
         tf.summary.scalar('Entropy', Entropy)
         '''
-        n = length-1
+        tau = 5
+        n = length-tau
         N = int(np.log2(n) + 1)
 
         print('n: ', n)
@@ -311,26 +312,25 @@ class info_content():
         scale = (1/n)/(sigma_rate*2)
         scale = .1
 
-        bin_tau = 10
 
         dm = tfd.Independent(
                 tfd.MixtureSameFamily(
                     mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
-                        loc=tf.transpose([x[1:], x[:-1], y[:-1]]),
+                        loc=tf.transpose([x[tau:], x[:-tau], y[:-tau]]),
                         scale_diag=[[scale]*3])),
                 reinterpreted_batch_ndims=0)
 
         dmx = tfd.MixtureSameFamily(
                 mixture_distribution=tfd.Categorical(probs=[1/n]*n),
-                components_distribution=tfd.Normal(loc=x[:-1], scale=scale)
+                components_distribution=tfd.Normal(loc=x[:-tau], scale=scale)
                 )
 
         dmxx = tfd.Independent(
                 tfd.MixtureSameFamily(
                     mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
-                        loc=tf.transpose([x[1:],x[:-1]]),
+                        loc=tf.transpose([x[tau:],x[:-tau]]),
                         scale_diag=[scale]*2)),
                 reinterpreted_batch_ndims=0)
 
@@ -338,7 +338,7 @@ class info_content():
                 tfd.MixtureSameFamily(
                     mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
-                        loc=tf.transpose([x[:-1],y[:-1]]),
+                        loc=tf.transpose([x[:-tau],y[:-tau]]),
                         scale_diag=[scale]*2)),
                 reinterpreted_batch_ndims=0)
 

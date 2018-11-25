@@ -40,8 +40,8 @@ MODE = 'predict'
 MODE = 'train'
 
 # Save the model
-is_save = False
 is_save = True
+is_save = False
 
 # Drawing graphs flag
 is_plot = False
@@ -201,7 +201,7 @@ def inference(length):
 
     return in_norm, inputs, outputs, params
 
-def tf_get_lyapunov(seq):
+def tf_get_lyapunov(seq, length):
     '''
     本来リアプノフ指数はmean(log(f'))だが、f'<<0の場合に-Infとなってしまうため、
     mean(log(1+f'))とする。しかし、それだとこの式ではカオス性を持つかわからなくなってしまう。
@@ -212,7 +212,7 @@ def tf_get_lyapunov(seq):
     mean(log(1+f')-log(2))とする（0以上ならばカオス性を持つという性質は変わらない）
     '''
     
-    dt = 1/len(seq)
+    dt = 1/length
     diff = tf.abs(seq[1:]-seq[:-1])
     lyapunov = tf.reduce_mean(tf.log1p(diff/dt)-tf.log(tf.cast(2.0, tf.float32)))
 
@@ -222,13 +222,12 @@ def tf_get_lyapunov(seq):
 def loss(inputs, outputs, length, mode):
     # if mode==True: TE(y->x)
 
-    '''
     # Laypunov-Exponent
     with tf.name_scope('Lyapunov'):
         lyapunov = []
         for i in range(output_units):
-            lyapunov.append(tf_get_lyapunov(outputs[:,i]))
-    '''
+            lyapunov.append(tf_get_lyapunov(outputs[:,i], length))
+            tf.summary.scalar('lyapunov'+str(i), lyapunov[i])
 
     with tf.name_scope('TE-Loss'):
         ic = info_content.info_content()
@@ -992,31 +991,41 @@ if __name__ == "__main__":
 
     # fig, ax = plt.subplots(1, 1)
     fig = plt.figure(figsize=(10,6))
-    # plt.legend(['A', 'B'],loc=2)
-    # plt.xlim([0,1])
-    # plt.ylim([0,1])
 
-    outB = make_data(seq_len)
     # True: Following, False: Creative
     modeA = True
     modeB = False
-    epoch_size = 100
-    seq_len = 10
+
+    online_update = False
+    online_update = True
 
     trajectoryA = []
     trajectoryB = []
+
+    outB = make_data(seq_len)
+    outB = np.random.rand(seq_len, 2)
     for epoch in range(epoch_size):
         print('epoch: ', epoch)
 
         if epoch%10 == 0:
             modeA, modeB = modeB, modeA
+            pass
+
+        # colorA, colorB = ('r','b') if modeA else ('g','m')
+        colorA, colorB = 'r', 'b'
 
         feed_dictA = {inputs:outB, Mode:modeA}
 
-        outA = sessA.run(outputs, feed_dict=feed_dictA)
+        outA, gradientsA = sessA.run([outputs, grad], feed_dict=feed_dictA)
+
         
         feed_dictB = {inputs:outA, Mode:modeB}
-        outB = sessB.run(outputs, feed_dict=feed_dictB)
+        outB, gradientsB = sessB.run([outputs, grad], feed_dict=feed_dictB)
+        if epoch % 10:
+            for (g, v) in gradientsA:
+                print('gradA: ', g[0][0:5])
+            for (g, v) in gradientsB:
+                print('gradB: ', g[0][0:5])
 
         summaryA, _ = sessA.run([merged, train_step], feed_dictA)
         summaryB, _ = sessB.run([merged, train_step], feed_dictB)
@@ -1027,13 +1036,24 @@ if __name__ == "__main__":
         print('[A] mode={}, value={}'.format(modeA, np.array(outA[0])-0.5))
         print('[B] mode={}, value={}'.format(modeB, np.array(outB[0])-0.5))
 
-        for i in range(seq_len):
-            trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
-            trajectoryB.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outB[i])-0.5])
+        if not online_update:
+            trajectoryA.extend((trajectoryA[-1] if len(trajectoryA) != 0 else np.zeros(len(outA[0]))) + np.cumsum(np.array(outA)-0.5, axis=0))
+            trajectoryB.extend((trajectoryB[-1] if len(trajectoryB) != 0 else np.zeros(len(outB[0]))) + np.cumsum(np.array(outB)-0.5, axis=0))
 
-            plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-r', lw=0.1, label='A')
-            plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-b', lw=0.1, label='B')
-            plt.pause(0.01)
+        if online_update:
+            for i in range(seq_len):
+                trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
+                trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])-0.5])
+
+                plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
+                plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+                plt.pause(0.01)
+
+        
+    if not online_update:
+        plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
+        plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+
 
     print('Finish')
     plt.show()
