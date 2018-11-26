@@ -26,6 +26,8 @@ tfd = tfp.distributions
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+import pyxhook
+
 '''
 # Baysian Optimization
 import GPy
@@ -956,8 +958,7 @@ def learning():
         print("optimized parameters: {0}".format(opt_mnist.x_opt))
         print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
-            
-if __name__ == "__main__":
+def training2():
     sessA = tf.InteractiveSession()
     sessB = tf.InteractiveSession()
 
@@ -1059,22 +1060,104 @@ if __name__ == "__main__":
     plt.show()
 
 
-    # 描画データを更新するときにplot関数を使うと
-    # lineオブジェクトが都度増えてしまうので，注意．
-    #
-    # 一番楽なのは上記で受け取ったlinesに対して
-    # set_data()メソッドで描画データを更新する方法．
-    # lines.set_data(x, y)
-    # plt.plot([-1,-1],[1,1], c='r')
-    # plt.plot([-1,-1],[1,1],)
+def kbevent(event):
+    print(event.Key)
+    pos = 0
 
-    # set_data()を使うと軸とかは自動設定されないっぽいので，
-    # 今回の例だとあっという間にsinカーブが描画範囲からいなくなる．
-    # そのためx軸の範囲は適宜修正してやる必要がある．
-    # ax.set_xlim((x.min(), x.max()))
+    if event.Ascii == 32:
+        print('::space')
+    if event.Key == 'Up':
+        print('::UP')
+        pos = pos + 1
+        log = open('../key.log', 'a')
+        log.write(str(pos))
 
-    
 
+
+if __name__ == "__main__":
+    sessA = tf.InteractiveSession()
+
+    with tf.name_scope('Mode'):
+        Mode = tf.placeholder(dtype = tf.bool, name='Mode')
+
+    norm_in, inputs, outputs, params = inference(seq_len)
+    Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
+
+    error, pdf = loss(norm_in, outputs, seq_len, Mode)
+    tf.summary.scalar('error', error)
+    train_step, grad = train(error, [Wi, bi, Wo])
+
+    merged = tf.summary.merge_all()
+
+    # Tensorboard logfile
+    log_pathA = '../Alogdir'
+
+    if tf.gfile.Exists(log_pathA):
+        tf.gfile.DeleteRecursively(log_pathA)
+    writerA = tf.summary.FileWriter(log_pathA, sessA.graph)
+
+    sessA.run(tf.global_variables_initializer())
+
+    # fig, ax = plt.subplots(1, 1)
+    fig = plt.figure(figsize=(10,6))
+
+    hookman = pyxhook.HookManager()
+    hookman.KeyDown = kbevent
+    hookman.HookKeyboard()
+    hookman.start()
+
+    # True: Following, False: Creative
+    modeA = True
+
+    online_update = False
+    online_update = True
+
+    trajectoryA = []
+    trajectoryB = []
+
+    outB = np.random.rand(seq_len, 2)
+    colorA, colorB = 'r', 'b'
+    for epoch in range(epoch_size):
+        print('epoch: ', epoch)
+
+        # colorA, colorB = ('r','b') if modeA else ('g','m')
+
+        feed_dictA = {inputs:outB, Mode:modeA}
+
+        outA, gradientsA = sessA.run([outputs, grad], feed_dict=feed_dictA)
+
+        
+        if epoch % 10:
+            for (g, v) in gradientsA:
+                print('gradA: ', g[0][0:5])
+
+        summaryA, _ = sessA.run([merged, train_step], feed_dictA)
+
+        writerA.add_summary(summaryA, epoch)
+
+        print('[A] mode={}, value={}'.format(modeA, np.array(outA[0])-0.5))
+
+        if not online_update:
+            trajectoryA.extend((trajectoryA[-1] if len(trajectoryA) != 0 else np.zeros(len(outA[0]))) + np.cumsum(np.array(outA)-0.5, axis=0))
+            trajectoryB.extend((trajectoryB[-1] if len(trajectoryB) != 0 else np.zeros(len(outB[0]))) + np.cumsum(np.array(outB)-0.5, axis=0))
+
+        if online_update:
+            for i in range(seq_len):
+                trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
+                trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])-0.5])
+
+                plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
+                plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+                plt.pause(0.01)
+
+        
+    if not online_update:
+        plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
+        plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+
+
+    print('Finish')
+    plt.show()
 
     # tf.app.run()
 
