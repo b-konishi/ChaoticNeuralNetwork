@@ -53,7 +53,7 @@ seq_len = 100
 
 epoch_size = 100
 input_units = 2
-inner_units = 20
+inner_units = 100
 output_units = 2
 
 # 中間層層数
