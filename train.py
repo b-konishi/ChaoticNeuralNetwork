@@ -49,7 +49,7 @@ is_plot = True
 
 activation = tf.nn.tanh
 
-seq_len = 10
+seq_len = 100
 
 epoch_size = 100
 input_units = 2
@@ -1007,7 +1007,7 @@ if __name__ == "__main__":
     for epoch in range(epoch_size):
         print('epoch: ', epoch)
 
-        if epoch%10 == 0:
+        if epoch%1 == 0:
             modeA, modeB = modeB, modeA
             pass
 
