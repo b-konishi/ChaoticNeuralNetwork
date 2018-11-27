@@ -958,6 +958,7 @@ def learning():
         print("optimized parameters: {0}".format(opt_mnist.x_opt))
         print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
+if __name__ == "__main__":
 def training2():
     sessA = tf.InteractiveSession()
     sessB = tf.InteractiveSession()
@@ -997,8 +998,8 @@ def training2():
     modeA = True
     modeB = False
 
-    online_update = False
     online_update = True
+    online_update = False
 
     trajectoryA = []
     trajectoryB = []
@@ -1009,7 +1010,7 @@ def training2():
         print('epoch: ', epoch)
 
         if epoch%1 == 0:
-            modeA, modeB = modeB, modeA
+            # modeA, modeB = modeB, modeA
             pass
 
         # colorA, colorB = ('r','b') if modeA else ('g','m')
@@ -1074,6 +1075,7 @@ def kbevent(event):
 
 
 
+# def test():
 if __name__ == "__main__":
     sessA = tf.InteractiveSession()
 
@@ -1101,10 +1103,12 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots(1, 1)
     fig = plt.figure(figsize=(10,6))
 
+    '''
     hookman = pyxhook.HookManager()
     hookman.KeyDown = kbevent
     hookman.HookKeyboard()
     hookman.start()
+    '''
 
     # True: Following, False: Creative
     modeA = True
