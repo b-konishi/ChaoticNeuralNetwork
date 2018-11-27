@@ -10,11 +10,13 @@
 import my_library as my
 import chaotic_nn_cell
 import info_content
+import draw
 
 # Standard
 import math
 import time
 import numpy as np
+import threading
 
 # Tensorflow
 import tensorflow as tf
@@ -26,7 +28,7 @@ tfd = tfp.distributions
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-import pyxhook
+import tkinter
 
 '''
 # Baysian Optimization
@@ -51,9 +53,9 @@ is_plot = True
 
 activation = tf.nn.tanh
 
-seq_len = 100
+seq_len = 10
 
-epoch_size = 100
+epoch_size = 1000
 input_units = 2
 inner_units = 100
 output_units = 2
@@ -141,7 +143,7 @@ def set_innerlayers(inputs, layers_size):
 
     return inner_output
 
-def normalize(v):
+def tf_normalize(v):
     with tf.name_scope('Normalize'):
         norm = (v-tf.reduce_min(v,0))/(tf.reduce_max(v,0)-tf.reduce_min(v,0))
         sign = tf.nn.relu(tf.sign(v))
@@ -167,7 +169,7 @@ def inference(length):
             params['bi'] = bi
 
         # input: [None, input_units]
-        in_norm = normalize(inputs)
+        in_norm = tf_normalize(inputs)
         fi = tf.matmul(in_norm, Wi) + bi
         sigm = tf.nn.sigmoid(fi)
 
@@ -199,7 +201,7 @@ def inference(length):
             params['bo'] = bo
 
         fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
-        outputs = normalize(fo)
+        outputs = tf_normalize(fo)
 
     return in_norm, inputs, outputs, params
 
@@ -958,7 +960,7 @@ def learning():
         print("optimized parameters: {0}".format(opt_mnist.x_opt))
         print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 def training2():
     sessA = tf.InteractiveSession()
     sessB = tf.InteractiveSession()
@@ -1061,22 +1063,8 @@ def training2():
     plt.show()
 
 
-def kbevent(event):
-    print(event.Key)
-    pos = 0
-
-    if event.Ascii == 32:
-        print('::space')
-    if event.Key == 'Up':
-        print('::UP')
-        pos = pos + 1
-        log = open('../key.log', 'a')
-        log.write(str(pos))
-
-
-
-# def test():
-if __name__ == "__main__":
+# if __name__ == "__main__":
+def test():
     sessA = tf.InteractiveSession()
 
     with tf.name_scope('Mode'):
@@ -1103,6 +1091,8 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots(1, 1)
     fig = plt.figure(figsize=(10,6))
 
+    event = draw.Event()
+
     '''
     hookman = pyxhook.HookManager()
     hookman.KeyDown = kbevent
@@ -1113,8 +1103,8 @@ if __name__ == "__main__":
     # True: Following, False: Creative
     modeA = True
 
-    online_update = False
     online_update = True
+    online_update = False
 
     trajectoryA = []
     trajectoryB = []
@@ -1127,10 +1117,8 @@ if __name__ == "__main__":
         # colorA, colorB = ('r','b') if modeA else ('g','m')
 
         feed_dictA = {inputs:outB, Mode:modeA}
-
         outA, gradientsA = sessA.run([outputs, grad], feed_dict=feed_dictA)
 
-        
         if epoch % 10:
             for (g, v) in gradientsA:
                 print('gradA: ', g[0][0:5])
@@ -1141,18 +1129,32 @@ if __name__ == "__main__":
 
         print('[A] mode={}, value={}'.format(modeA, np.array(outA[0])-0.5))
 
+        '''
         if not online_update:
             trajectoryA.extend((trajectoryA[-1] if len(trajectoryA) != 0 else np.zeros(len(outA[0]))) + np.cumsum(np.array(outA)-0.5, axis=0))
             trajectoryB.extend((trajectoryB[-1] if len(trajectoryB) != 0 else np.zeros(len(outB[0]))) + np.cumsum(np.array(outB)-0.5, axis=0))
+        '''
 
-        if online_update:
-            for i in range(seq_len):
-                trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
-                trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])-0.5])
+        outB = []
+        pos_ = [0., 0.]
+        for i in range(seq_len):
+            # print('outA', outA)
+            event.set_movement(np.array(outA[i]))
 
+            pos = event.get_pos()
+            outB.append([pos[0]-pos_[0], pos[1]-pos_[1]])
+            # outB = (outB-np.min(outB, axis=0))/(np.max(outB, axis=0)-np.min(outB, axis=0))
+            pos_ = pos
+
+            trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
+            trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])-0.5])
+
+            if online_update:
                 plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
                 plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
                 plt.pause(0.01)
+            time.sleep(0.1)
+
 
         
     if not online_update:
@@ -1161,8 +1163,18 @@ if __name__ == "__main__":
 
 
     print('Finish')
-    plt.show()
+    # plt.show()
 
     # tf.app.run()
+
+
+if __name__ == "__main__":
+    test()
+    '''
+    calc_thread = threading.Thread(target=test)
+    # calc_thread.daemon = True
+    calc_thread.start()
+    '''
+
 
 
