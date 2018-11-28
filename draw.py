@@ -1,26 +1,30 @@
 import tkinter
 import time
 import threading
+import numpy as np
+from collections import deque
 
 
 class Event():
     CIRCLE_D = 30
-    CANVAS_PAD = 10
-    DISP_SIZE = 400
+    DISP_SIZE = 800
 
     INIT_POS1 = 10
     INIT_POS2 = DISP_SIZE/2
 
-    frame, canvas = None, None
+    frame, canvas = [None]*2
 
-    x1_pos, y1_pos = INIT_POS1, INIT_POS1
+    x1_pos, y1_pos = [INIT_POS1]*2
     dt = 0.01
 
-    x2_pos, y2_pos = INIT_POS2, INIT_POS2
-    dx2, dy2 = 0,0
+    x2_pos, y2_pos = [INIT_POS2]*2
+    dx2, dy2 = [0]*2
     is_output = False
 
+    # To responce for Key-Event at same-timing
     history = []
+
+    # Experimental numeric value...
     ARROW_KEYCODE = {'Up':111, 'Down':116, 'Right':114, 'Left':113}
 
     def __init__(self):
@@ -35,7 +39,6 @@ class Event():
         self.frame.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.canvas = tkinter.Canvas(self.frame, width=self.DISP_SIZE, height=self.DISP_SIZE)
-        # self.circle = self.canvas.create_oval(100,100,150,150, fill='blue', width=0)
         self.canvas.pack()
 
         self.frame.bind("<KeyPress>", self.keypress)
@@ -44,86 +47,106 @@ class Event():
         circle1 = self.canvas.create_oval(self.INIT_POS1, self.INIT_POS1, self.INIT_POS1+self.CIRCLE_D, self.INIT_POS1+self.CIRCLE_D, fill='red', width=0)
         circle2 = self.canvas.create_oval(self.INIT_POS2, self.INIT_POS2, self.INIT_POS2+self.CIRCLE_D, self.INIT_POS2+self.CIRCLE_D, fill='blue', width=0)
 
-        update_thread = threading.Thread(target=self.update, args=[self.frame, (circle1, circle2)])
+        update_thread = threading.Thread(target=self.update, args=[(circle1, circle2)])
+        # When this window is shutdowned, this thread is also finished.
         update_thread.daemon = True
         update_thread.start()
 
+        # This thread must be worked in the background since it's finite-loop.
         self.frame.mainloop()
 
-
-
-    def update(self, frame, obj):
+    # Always Monitoring
+    def update(self, obj):
         obj1, obj2 = obj
+        pre_pos1, pre_pos2 = [self.INIT_POS1]*2, [self.INIT_POS2]*2
+        line_interval = self.DISP_SIZE/20
+        R = self.CIRCLE_D/2
 
+        TRAJ_MAX = 10
+        trajectory1 = deque([])
+        trajectory2 = deque([])
         while True:
+            # System-Output
             if self.is_output:
-                dx2_, dy2_ = 0,0
+                self.is_output = False
 
                 dx2_, dy2_ = self.dx2, self.dy2
-                print('update: ', dx2_, dy2_)
                 self.x2_pos += dx2_
                 self.y2_pos += dy2_
 
-                '''
-                if self.x2_pos <= 0 or self.x2_pos >= self.DISP_SIZE-self.CIRCLE_D:
-                    self.x2_pos -= self.dx2
-                    self.dx2 = 0.
-                if self.y2_pos <= 0 or self.y2_pos >= self.DISP_SIZE-self.CIRCLE_D:
-                    self.y2_pos -= self.dy2
-                    self.dy2 = 0.
-                '''
-
-                if self.x2_pos <= 0:
-                    dx2_ = self.DISP_SIZE-self.CIRCLE_D - self.x2_pos
+                if self.x2_pos < 0:
+                    dx2_ = self.DISP_SIZE-self.CIRCLE_D - (self.x2_pos-dx2_)
                     self.x2_pos = self.DISP_SIZE-self.CIRCLE_D
-                elif self.x2_pos >= self.DISP_SIZE-self.CIRCLE_D:
-                    dx2_ = 0 - self.x2_pos
+                    pre_pos2[0] = self.x2_pos
+                elif self.x2_pos > self.DISP_SIZE-self.CIRCLE_D:
+                    dx2_ = 0 - (self.x2_pos-dx2_)
                     self.x2_pos = 0
+                    pre_pos2[0] = self.x2_pos
 
-                if self.y2_pos <= 0:
-                    dy2_ = self.DISP_SIZE-self.CIRCLE_D - self.y2_pos
+                if self.y2_pos < 0:
+                    dy2_ = self.DISP_SIZE-self.CIRCLE_D - (self.y2_pos-dy2_)
                     self.y2_pos = self.DISP_SIZE-self.CIRCLE_D
-                elif self.y2_pos >= self.DISP_SIZE-self.CIRCLE_D:
-                    dy2_ = 0 - self.y2_pos
+                    pre_pos2[1] = self.y2_pos
+                elif self.y2_pos > self.DISP_SIZE-self.CIRCLE_D:
+                    dy2_ = 0 - (self.y2_pos-dy2_)
                     self.y2_pos = 0
-
-                print('POS: ', dx2_, dy2_)
+                    pre_pos2[1] = self.y2_pos
 
                 self.canvas.move(obj2, dx2_, dy2_)
-                self.is_output = False
 
-            dt_ = self.dt
+                # Drawing the Trajectory
+                diff = np.sqrt(sum((np.array(pre_pos2)-np.array([self.x2_pos, self.y2_pos]))**2))
+                if diff >= line_interval:
+                    trajectory2.append(self.canvas.create_line(pre_pos2[0]+R, pre_pos2[1]+R, self.x2_pos+R, self.y2_pos+R, fill='blue'))
+                    pre_pos2 = [self.x2_pos, self.y2_pos]
+                    
+                    if len(trajectory2) > TRAJ_MAX:
+                        self.canvas.delete(trajectory2.popleft())
+
+
+            # User Input with Arrow-Key
             for key in self.history:
+                dt_ = self.dt
                 if key == self.ARROW_KEYCODE['Up']:
-                    self.y1_pos -= dt_
+                    self.y1_pos -= self.dt
                     if self.y1_pos <= 0:
-                        self.y1_pos += dt_
-                        dt_ = 0
+                        dt_ = -(self.DISP_SIZE-self.CIRCLE_D - self.y1_pos)
+                        self.y1_pos = self.DISP_SIZE-self.CIRCLE_D
+                        pre_pos1[1] = self.y1_pos
                     self.canvas.move(obj1, 0, -dt_)
 
                 if key == self.ARROW_KEYCODE['Down']:
-                    self.y1_pos += dt_
+                    self.y1_pos += self.dt
                     if self.y1_pos >= self.DISP_SIZE-self.CIRCLE_D:
-                        self.y1_pos -= dt_
-                        dt_ = 0
+                        dt_ = 0 - self.y1_pos
+                        self.y1_pos = 0
+                        pre_pos1[1] = self.y1_pos
                     self.canvas.move(obj1, 0, dt_)
 
                 if key == self.ARROW_KEYCODE['Left']:
-                    self.x1_pos -= dt_
+                    self.x1_pos -= self.dt
                     if self.x1_pos <= 0:
-                        self.x1_pos += dt_
-                        dt_ = 0
+                        dt_ = -(self.DISP_SIZE-self.CIRCLE_D - self.x1_pos)
+                        self.x1_pos = self.DISP_SIZE-self.CIRCLE_D
+                        pre_pos1[0] = self.x1_pos
                     self.canvas.move(obj1, -dt_, 0)
 
                 if key == self.ARROW_KEYCODE['Right']:
-                    self.x1_pos += dt_
+                    self.x1_pos += self.dt
                     if self.x1_pos >= self.DISP_SIZE-self.CIRCLE_D:
-                        self.x1_pos -= dt_
-                        dt_ = 0
+                        dt_ = 0 - self.x1_pos
+                        self.x1_pos = 0
+                        pre_pos1[0] = self.x1_pos
                     self.canvas.move(obj1, dt_, 0)
 
-            # print('({},{})'.format(int(self.x1_pos), int(self.y1_pos)))
-            # frame.update()
+            # Drawing the Trajectory
+            diff = np.sqrt(sum((np.array(pre_pos1)-np.array([self.x1_pos, self.y1_pos]))**2))
+            if diff >= line_interval:
+                trajectory1.append(self.canvas.create_line(pre_pos1[0]+R, pre_pos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill='red'))
+                pre_pos1 = [self.x1_pos, self.y1_pos]
+                if len(trajectory1) > TRAJ_MAX:
+                    self.canvas.delete(trajectory1.popleft())
+
 
     def get_pos(self):
         return [self.x1_pos, self.y1_pos]

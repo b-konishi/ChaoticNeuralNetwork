@@ -53,7 +53,7 @@ is_plot = True
 
 activation = tf.nn.tanh
 
-seq_len = 10
+seq_len = 50
 
 epoch_size = 1000
 input_units = 2
@@ -1000,8 +1000,8 @@ def training2():
     modeA = True
     modeB = False
 
-    online_update = True
     online_update = False
+    online_update = True
 
     trajectoryA = []
     trajectoryB = []
@@ -1093,13 +1093,6 @@ def test():
 
     event = draw.Event()
 
-    '''
-    hookman = pyxhook.HookManager()
-    hookman.KeyDown = kbevent
-    hookman.HookKeyboard()
-    hookman.start()
-    '''
-
     # True: Following, False: Creative
     modeA = True
 
@@ -1143,7 +1136,6 @@ def test():
 
             pos = event.get_pos()
             outB.append([pos[0]-pos_[0], pos[1]-pos_[1]])
-            # outB = (outB-np.min(outB, axis=0))/(np.max(outB, axis=0)-np.min(outB, axis=0))
             pos_ = pos
 
             trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
@@ -1170,6 +1162,8 @@ def test():
 
 if __name__ == "__main__":
     test()
+    # training2()
+
     '''
     calc_thread = threading.Thread(target=test)
     # calc_thread.daemon = True
