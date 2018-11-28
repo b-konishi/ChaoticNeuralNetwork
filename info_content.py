@@ -9,7 +9,10 @@ tfd = tfp.distributions
 
 import matplotlib.pyplot as plt
 
-class info_content():
+class info_content:
+
+    def __init__(self):
+        pass
 
     def get_prob(self, x):
         p = dict()

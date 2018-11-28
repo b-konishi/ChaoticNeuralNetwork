@@ -171,8 +171,7 @@ class Event():
         self.frame.destroy()
 
 
-# root.bind("<Up>", upkey_event)
-
-# e = Event()
+if __name__ == '__main__':
+    e = Event()
 
 
