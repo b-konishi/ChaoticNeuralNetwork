@@ -63,7 +63,7 @@ class TransferEntropy:
         # Occurred the error when 'scale' sets the value lower than about 0.1.
         sigma_rate = .1
         scale = (1/n)/(sigma_rate*2)
-        scale = .1
+        scale = .5
 
 
         dm = tfd.Independent(

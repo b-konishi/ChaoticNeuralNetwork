@@ -51,7 +51,7 @@ class CNN_Simulator:
 
         # sequence-length at once
         self.seq_len = 30
-        self.epoch_size = 10
+        self.epoch_size = 100
 
         self.input_units = 2
         self.inner_units = 20
@@ -133,21 +133,28 @@ class CNN_Simulator:
 
     def tf_normalize(self, v):
         with tf.name_scope('Normalize'):
-            norm = (v-tf.reduce_min(v,0))/(tf.reduce_max(v,0)-tf.reduce_min(v,0))
-            sign = tf.nn.relu(tf.sign(v))
-            var = tf.where(tf.is_nan(norm), sign, norm)
+            # Normalize [-0.5, 0.5]
+            norm = (v-tf.reduce_min(v,0))/(tf.reduce_max(v,0)-tf.reduce_min(v,0)) - 0.5
 
-        return var
+            # sign = tf.nn.relu(tf.sign(v))
+            # return tf.where(tf.is_nan(norm), sign, norm)
+
+            return tf.where(tf.is_nan(norm), tf.constant(0.0,shape=v.get_shape()), norm)
+
 
     def np_normalize(self, v):
 
+        # To avoid a warning about zero-divide
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            norm = (v-np.min(v,axis=0))/(np.max(v,axis=0)-np.min(v,axis=0))
 
-        sign = np.where(np.sign(v)==-1, 0, v)
+            # Normalize [-0.5, 0.5]
+            norm = (v-np.min(v,axis=0))/(np.max(v,axis=0)-np.min(v,axis=0)) - 0.5
 
-        return np.where(np.isnan(norm), sign, norm)
+        # sign = np.where(np.sign(v)==-1, 0, v)
+        # return np.where(np.isnan(norm), sign, norm)
+
+        return np.where(np.isnan(norm), 0.0, norm)
 
 
     def inference(self, length):
@@ -200,8 +207,8 @@ class CNN_Simulator:
 
             # fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
             fo = tf.matmul(inner_output, Wo) + bo
-            # outputs = self.tf_normalize(fo)
-            outputs = fo
+            outputs = self.tf_normalize(fo)
+            # outputs = fo
 
         return in_norm, inputs, outputs, params
 
@@ -597,7 +604,7 @@ class CNN_Simulator:
 
                     in1, in2, out1, out2 = in_[:,0], in_[:,1], out[:,0], out[:,1]
 
-                    if False:
+                    if True:
                         plt.figure()
                         plt.title('time-input-graph(epoch:{})'.format(epoch))
                         plt.plot(range(len(in1)), in1, c='r', lw=1, label='input1')
@@ -610,7 +617,7 @@ class CNN_Simulator:
                         plt.plot(range(len(out2)), out2, c='b', lw=1, label='output2')
                         plt.legend(loc=2)
 
-                    if False:
+                    if True:
                         plt.figure()
                         plt.title('delayed-input-2Dgraph(epoch:{})'.format(epoch))
                         plt.plot(in1[:-self.tau], in1[self.tau:], c='r', lw=1, label='input')
@@ -623,7 +630,7 @@ class CNN_Simulator:
                         plt.plot(out2[:-self.tau], out2[self.tau:], c='b', lw=1, label='output')
                         plt.legend(loc=2)
 
-                    if False:
+                    if True:
                         fig = plt.figure()
                         ax = fig.add_subplot(111, projection='3d')
                         ax.set_title('delayed-out-3Dgraph(epoch:{})'.format(epoch))
@@ -636,8 +643,8 @@ class CNN_Simulator:
             # plt.plot(range(self.epoch_size), (l_list), c='b', lw=1)
 
             sampling_freq = 14700
-            my.Sound.save_sound((np.array(out_sound1)-0.5)*40000, self.SOUND_PATH + 'chaos1.wav', sampling_freq)
-            my.Sound.save_sound((np.array(out_sound2)-0.5)*40000, self.SOUND_PATH + 'chaos2.wav', sampling_freq)
+            my.Sound.save_sound((np.array(out_sound1))*40000, self.SOUND_PATH + 'chaos1.wav', sampling_freq)
+            my.Sound.save_sound((np.array(out_sound2))*40000, self.SOUND_PATH + 'chaos2.wav', sampling_freq)
 
             if False:
                 plt.figure()
@@ -649,7 +656,7 @@ class CNN_Simulator:
                 plt.title('Disposal Time')
                 plt.plot(range(len(time_list)-1), time_list[1:])
 
-            if True:
+            if False:
                 plt.figure()
                 plt.title('Lyapunov Exponent')
                 plt.plot(range(len(lyapunov)), lyapunov)
@@ -720,6 +727,7 @@ class CNN_Simulator:
 
         with tf.name_scope('Mode'):
             Mode = tf.placeholder(dtype = tf.bool, name='Mode')
+            tf.summary.scalar('Mode', tf.cast(Mode, tf.int32))
 
         norm_in, inputs, outputs, params = self.inference(self.seq_len)
         Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
@@ -759,17 +767,14 @@ class CNN_Simulator:
         trajectoryA = []
         trajectoryB = []
 
-        outB = self.make_data(self.seq_len)
         outB = np.random.rand(self.seq_len, 2)
+        colorA, colorB = 'r', 'b'
         for epoch in range(self.epoch_size):
             print('epoch: ', epoch)
 
-            if epoch%1 == 0:
-                # modeA, modeB = modeB, modeA
+            if epoch%10 == 0:
+                modeA, modeB = modeB, modeA
                 pass
-
-            # colorA, colorB = ('r','b') if modeA else ('g','m')
-            colorA, colorB = 'r', 'b'
 
             feed_dictA = {inputs:outB, Mode:modeA}
 
@@ -828,7 +833,7 @@ class CNN_Simulator:
 
         error, pdf = self.loss(norm_in, outputs, self.seq_len, Mode)
         tf.summary.scalar('error', error)
-        train_step, grad = self.train(error, [Wi, bi, Wo])
+        train_step, grad = self.train(error, [Wi, bi, Wo, bo])
 
         merged = tf.summary.merge_all()
 
@@ -847,16 +852,15 @@ class CNN_Simulator:
         event = draw.Event()
 
         # True: Following, False: Creative
+        modeA = False
         modeA = True
-
-        online_update = True
-        online_update = False
 
         trajectoryA = []
         trajectoryB = []
 
         outB = np.random.rand(self.seq_len, 2)
         colorA, colorB = 'r', 'b'
+        is_drawing = True
         for epoch in range(self.epoch_size):
             print('epoch: ', epoch)
 
@@ -870,48 +874,40 @@ class CNN_Simulator:
                     print('gradA: ', g[0][0:5])
 
             summaryA, _ = sessA.run([merged, train_step], feed_dictA)
-
             writerA.add_summary(summaryA, epoch)
 
-            # print('[A] mode={}, value={}'.format(modeA, np.array(outA)-0.5))
-
-            '''
-            if not online_update:
-                trajectoryA.extend((trajectoryA[-1] if len(trajectoryA) != 0 else np.zeros(len(outA[0]))) + np.cumsum(np.array(outA)-0.5, axis=0))
-                trajectoryB.extend((trajectoryB[-1] if len(trajectoryB) != 0 else np.zeros(len(outB[0]))) + np.cumsum(np.array(outB)-0.5, axis=0))
-            '''
-
             outB = []
+            mag = 100
             for i in range(self.seq_len):
-                event.set_movement(np.array(outA[i]))
+                event.set_movement(np.array(outA[i]), mag)
 
-                diff = event.get_pos()
+                diff, is_drawing = event.get_pos()
+                print(diff)
                 outB.append(diff)
 
                 time.sleep(0.1)
 
+            if not is_drawing:
+                break
+
+            # [CAUTION]
+            # In case of Normalization,
+            # the output-trajectory is not same as the actual trajectory I operated, so NOT Normalization.
             # outB = self.np_normalize(outB)
+            outB = np.array(outB)/mag
 
             for i in range(self.seq_len):
                 trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])])
                 trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])])
 
-                if online_update:
-                    plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
-                    plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
-                    plt.pause(0.01)
-
-
-            print('[A] value={}'.format(outA))
-            print('[B] value={}'.format(outB))
-            # print('[B] traj={}'.format(np.array(trajectoryB)))
+            # print('[A] value={}'.format(outA))
+            # print('[B] value={}'.format(outB))
 
 
             
-        if not online_update:
-            plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
-            plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
-            plt.legend(loc=2)
+        plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
+        plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+        plt.legend(loc=2)
 
 
         print('Finish')
@@ -923,8 +919,8 @@ class CNN_Simulator:
 if __name__ == "__main__":
     simulator = CNN_Simulator()
     # simulator.learning1()
-    simulator.human_agent_interaction()
     # simulator.robot_robot_interaction()
+    simulator.human_agent_interaction()
 
     '''
     calc_thread = threading.Thread(target=test)

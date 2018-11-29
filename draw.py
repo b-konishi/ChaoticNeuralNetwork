@@ -6,6 +6,9 @@ from collections import deque
 
 
 class Event():
+    USER_MODE = 'USER'
+    RANDOM_MODE = 'RANDOM'
+
     DISP_SIZE = 800
     CANVAS_MARGIN = 10
     CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
@@ -19,18 +22,19 @@ class Event():
     # Experimental numeric value...
     ARROW_KEYCODE = {'Up':111, 'Down':116, 'Right':114, 'Left':113}
 
-    def __init__(self):
+    def __init__(self, mode=USER_MODE):
+        self.MODE = mode
         self.frame, self.canvas = [None]*2
 
         self.x1_pos, self.y1_pos = [self.INIT_POS1]*2
-        self.dx1, self.dy1 = [0]*2
-        self.dt = 0.01
+        self.dx1, self.dy1 = 0.01, 0.01
         self.preget_pos1 = [self.INIT_POS1]*2
 
         self.x2_pos, self.y2_pos = [self.INIT_POS2]*2
         self.dx2, self.dy2 = [0]*2
         self.is_output = False
 
+        self.is_drawing = True
 
         # To responce for Key-Event at same-timing
         self.history = []
@@ -71,13 +75,13 @@ class Event():
     def update(self, obj):
         obj1, obj2 = obj
         pre_pos1, pre_pos2 = [self.INIT_POS1]*2, [self.INIT_POS2]*2
-        line_interval = self.DISP_SIZE/20
         R = self.CIRCLE_D/2
 
-        TRAJ_MAX = 20
-        trajectory1 = deque([])
-        trajectory2 = deque([])
+        TRAJ_MAX = 40
+        trajectory1, trajectory2 = deque([]), deque([])
         while True:
+            line_interval = self.DISP_SIZE/20
+            
             # System-Output
             if self.is_output:
                 self.is_output = False
@@ -116,48 +120,62 @@ class Event():
                         self.canvas.delete(trajectory2.popleft())
 
 
+            if self.MODE == self.RANDOM_MODE:
+                line_interval = self.DISP_SIZE/40
+                self.dx1 = (np.random.rand()-0.5)*10
+                self.dy1 = (np.random.rand()-0.5)*10
+                print(self.dx1, self.dy1)
+
+                self.history.append(self.ARROW_KEYCODE['Right' if np.sign(self.dx1)>=1 else 'Left'])
+                self.history.append(self.ARROW_KEYCODE['Down' if np.sign(self.dy1)>=1 else 'Up'])
+                time.sleep(0.1)
+
+
+            # elif self.MODE == self.USER_MODE:
             # User Input with Arrow-Key
             for key in self.history:
-                dt_ = self.dt
+                dx_, dy_ = self.dx1, self.dy1
                 if key == self.ARROW_KEYCODE['Up']:
-                    self.y1_pos -= self.dt
+                    self.y1_pos -= self.dy1
                     if self.y1_pos <= 0:
-                        dt_ = -(self.CANVAS_SIZE-self.CIRCLE_D - self.y1_pos)
+                        dy_ = -(self.CANVAS_SIZE-self.CIRCLE_D - self.y1_pos)
                         self.y1_pos = self.CANVAS_SIZE-self.CIRCLE_D
                         pre_pos1[1] = self.y1_pos
                         self.TORUS[1] = True
 
-                    self.canvas.move(obj1, 0, -dt_)
+                    self.canvas.move(obj1, 0, -dy_)
 
-                if key == self.ARROW_KEYCODE['Down']:
-                    self.y1_pos += self.dt
+                elif key == self.ARROW_KEYCODE['Down']:
+                    self.y1_pos += self.dy1
                     if self.y1_pos >= self.CANVAS_SIZE-self.CIRCLE_D:
-                        dt_ = 0 - self.y1_pos
+                        dy_ = 0 - self.y1_pos
                         self.y1_pos = 0
                         pre_pos1[1] = self.y1_pos
                         self.TORUS[1] = True
 
-                    self.canvas.move(obj1, 0, dt_)
+                    self.canvas.move(obj1, 0, dy_)
 
-                if key == self.ARROW_KEYCODE['Left']:
-                    self.x1_pos -= self.dt
+                elif key == self.ARROW_KEYCODE['Left']:
+                    self.x1_pos -= self.dx1
                     if self.x1_pos <= 0:
-                        dt_ = -(self.CANVAS_SIZE-self.CIRCLE_D - self.x1_pos)
+                        dx_ = -(self.CANVAS_SIZE-self.CIRCLE_D - self.x1_pos)
                         self.x1_pos = self.CANVAS_SIZE-self.CIRCLE_D
                         pre_pos1[0] = self.x1_pos
                         self.TORUS[0] = True
 
-                    self.canvas.move(obj1, -dt_, 0)
+                    self.canvas.move(obj1, -dx_, 0)
 
-                if key == self.ARROW_KEYCODE['Right']:
-                    self.x1_pos += self.dt
+                elif key == self.ARROW_KEYCODE['Right']:
+                    self.x1_pos += self.dx1
                     if self.x1_pos >= self.CANVAS_SIZE-self.CIRCLE_D:
-                        dt_ = 0 - self.x1_pos
+                        dx_ = 0 - self.x1_pos
                         self.x1_pos = 0
                         pre_pos1[0] = self.x1_pos
                         self.TORUS[0] = True
 
-                    self.canvas.move(obj1, dt_, 0)
+                    self.canvas.move(obj1, dx_, 0)
+
+            self.dx1, self.dy1 = 0.01, 0.01
 
             # print('POS: ', self.x1_pos, self.y1_pos)
             # Drawing the Trajectory
@@ -169,6 +187,8 @@ class Event():
                     self.canvas.delete(trajectory1.popleft())
 
 
+
+
     def get_pos(self):
         pos = [self.x1_pos, self.y1_pos]
         _pre_pos, _pos = np.array(self.preget_pos1), np.array(pos)
@@ -177,18 +197,18 @@ class Event():
                 np.sign(-(_pos-_pre_pos))*(self.CANVAS_SIZE-abs(_pos-_pre_pos)),
                 _pos-_pre_pos
                 )
-        diff = [diff[0], -diff[1]]
 
         self.TORUS = [False, False]
+        diff = [diff[0], -diff[1]]
         self.preget_pos1 = pos
 
         # print('diff: ', diff)
 
-        return diff
+        return diff, self.is_drawing
 
-    def set_movement(self, pos):
+    def set_movement(self, pos, mag):
         dx_, dy_ = pos
-        self.dx2, self.dy2 = (dx_)*100, -(dy_)*100
+        self.dx2, self.dy2 = dx_*mag, -dy_*mag
         self.is_output = True
 
     def keypress(self, event):
@@ -209,8 +229,10 @@ class Event():
         self.frame.quit()
         self.frame.destroy()
 
+        self.is_drawing = False
+
 
 if __name__ == '__main__':
-    e = Event()
+    e = Event(Event.RANDOM_MODE)
 
 
