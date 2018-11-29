@@ -11,6 +11,7 @@ import math
 import time
 import numpy as np
 import threading
+import warnings
 
 # Tensorflow
 import tensorflow as tf
@@ -140,7 +141,10 @@ class CNN_Simulator:
 
     def np_normalize(self, v):
 
-        norm = (v-np.min(v,axis=0))/(np.max(v,axis=0)-np.min(v,axis=0))
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            norm = (v-np.min(v,axis=0))/(np.max(v,axis=0)-np.min(v,axis=0))
+
         sign = np.where(np.sign(v)==-1, 0, v)
 
         return np.where(np.isnan(norm), sign, norm)
@@ -195,8 +199,9 @@ class CNN_Simulator:
                 params['bo'] = bo
 
             # fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
-            fo = tf.matmul(inner_output, Wo)
-            outputs = self.tf_normalize(fo)
+            fo = tf.matmul(inner_output, Wo) + bo
+            # outputs = self.tf_normalize(fo)
+            outputs = fo
 
         return in_norm, inputs, outputs, params
 
@@ -851,7 +856,6 @@ class CNN_Simulator:
         trajectoryB = []
 
         outB = np.random.rand(self.seq_len, 2)
-        pos_ = [0., 0.]
         colorA, colorB = 'r', 'b'
         for epoch in range(self.epoch_size):
             print('epoch: ', epoch)
@@ -881,18 +885,16 @@ class CNN_Simulator:
             for i in range(self.seq_len):
                 event.set_movement(np.array(outA[i]))
 
-                pos = event.get_pos()
-                outB.append([pos[0]-pos_[0], -(pos[1]-pos_[1])])
-                pos_ = pos
+                diff = event.get_pos()
+                outB.append(diff)
 
                 time.sleep(0.1)
 
-            outB = self.np_normalize(outB)
+            # outB = self.np_normalize(outB)
 
             for i in range(self.seq_len):
-
-                trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
-                trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])-0.5])
+                trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])])
+                trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])])
 
                 if online_update:
                     plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
@@ -902,6 +904,7 @@ class CNN_Simulator:
 
             print('[A] value={}'.format(outA))
             print('[B] value={}'.format(outB))
+            # print('[B] traj={}'.format(np.array(trajectoryB)))
 
 
             
