@@ -6,8 +6,9 @@ from collections import deque
 
 
 class Event():
-    CIRCLE_D = 30
     DISP_SIZE = 800
+    CANVAS_MARGIN = 10
+    CIRCLE_D = 30
 
     INIT_POS1 = 10
     INIT_POS2 = DISP_SIZE/2
@@ -37,12 +38,15 @@ class Event():
         self.frame.title("Title")
         self.frame.geometry(str(self.DISP_SIZE)+'x'+str(self.DISP_SIZE))
         self.frame.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.frame.focus_set()
 
-        self.canvas = tkinter.Canvas(self.frame, width=self.DISP_SIZE, height=self.DISP_SIZE)
-        self.canvas.pack()
+        self.canvas = tkinter.Canvas(self.frame, width=self.DISP_SIZE-self.CANVAS_MARGIN*2, height=self.DISP_SIZE-self.CANVAS_MARGIN*2)
+        # self.canvas.pack()
+        self.canvas.place(x=self.CANVAS_MARGIN, y=self.CANVAS_MARGIN)
 
         self.frame.bind("<KeyPress>", self.keypress)
         self.frame.bind("<KeyRelease>", self.keyrelease)
+        self.frame.bind("<FocusOut>", self.focusout)
 
         circle1 = self.canvas.create_oval(self.INIT_POS1, self.INIT_POS1, self.INIT_POS1+self.CIRCLE_D, self.INIT_POS1+self.CIRCLE_D, fill='red', width=0)
         circle2 = self.canvas.create_oval(self.INIT_POS2, self.INIT_POS2, self.INIT_POS2+self.CIRCLE_D, self.INIT_POS2+self.CIRCLE_D, fill='blue', width=0)
@@ -52,7 +56,7 @@ class Event():
         update_thread.daemon = True
         update_thread.start()
 
-        # This thread must be worked in the background since it's finite-loop.
+        # This thread must be worked in the background since it's infinite-loop.
         self.frame.mainloop()
 
     # Always Monitoring
@@ -62,7 +66,7 @@ class Event():
         line_interval = self.DISP_SIZE/20
         R = self.CIRCLE_D/2
 
-        TRAJ_MAX = 10
+        TRAJ_MAX = 20
         trajectory1 = deque([])
         trajectory2 = deque([])
         while True:
@@ -139,6 +143,7 @@ class Event():
                         pre_pos1[0] = self.x1_pos
                     self.canvas.move(obj1, dt_, 0)
 
+            # print('POS: ', self.x1_pos, self.y1_pos)
             # Drawing the Trajectory
             diff = np.sqrt(sum((np.array(pre_pos1)-np.array([self.x1_pos, self.y1_pos]))**2))
             if diff >= line_interval:
@@ -153,7 +158,7 @@ class Event():
 
     def set_movement(self, pos):
         dx_, dy_ = pos
-        self.dx2, self.dy2 = (dx_-0.5)*20, (dy_-0.5)*20
+        self.dx2, self.dy2 = (dx_-0.5)*20, -(dy_-0.5)*20
         self.is_output = True
 
     def keypress(self, event):
@@ -165,6 +170,10 @@ class Event():
         # print(event.keycode)
         if event.keycode in self.history:
             self.history.pop(self.history.index(event.keycode))
+
+    def focusout(self, event):
+        self.history = []
+
 
     def on_closing(self):
         self.frame.quit()

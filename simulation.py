@@ -50,7 +50,7 @@ class CNN_Simulator:
 
         # sequence-length at once
         self.seq_len = 30
-        self.epoch_size = 100
+        self.epoch_size = 10
 
         self.input_units = 2
         self.inner_units = 20
@@ -137,6 +137,13 @@ class CNN_Simulator:
             var = tf.where(tf.is_nan(norm), sign, norm)
 
         return var
+
+    def np_normalize(self, v):
+
+        norm = (v-np.min(v,axis=0))/(np.max(v,axis=0)-np.min(v,axis=0))
+        sign = np.where(np.sign(v)==-1, 0, v)
+
+        return np.where(np.isnan(norm), sign, norm)
 
 
     def inference(self, length):
@@ -844,6 +851,7 @@ class CNN_Simulator:
         trajectoryB = []
 
         outB = np.random.rand(self.seq_len, 2)
+        pos_ = [0., 0.]
         colorA, colorB = 'r', 'b'
         for epoch in range(self.epoch_size):
             print('epoch: ', epoch)
@@ -861,7 +869,7 @@ class CNN_Simulator:
 
             writerA.add_summary(summaryA, epoch)
 
-            print('[A] mode={}, value={}'.format(modeA, np.array(outA)-0.5))
+            # print('[A] mode={}, value={}'.format(modeA, np.array(outA)-0.5))
 
             '''
             if not online_update:
@@ -870,14 +878,18 @@ class CNN_Simulator:
             '''
 
             outB = []
-            pos_ = [0., 0.]
             for i in range(self.seq_len):
-                # print('outA', outA)
                 event.set_movement(np.array(outA[i]))
 
                 pos = event.get_pos()
-                outB.append([pos[0]-pos_[0], pos[1]-pos_[1]])
+                outB.append([pos[0]-pos_[0], -(pos[1]-pos_[1])])
                 pos_ = pos
+
+                time.sleep(0.1)
+
+            outB = self.np_normalize(outB)
+
+            for i in range(self.seq_len):
 
                 trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
                 trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])-0.5])
@@ -887,17 +899,20 @@ class CNN_Simulator:
                     plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
                     plt.pause(0.01)
 
-                time.sleep(0.1)
+
+            print('[A] value={}'.format(outA))
+            print('[B] value={}'.format(outB))
 
 
             
         if not online_update:
             plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
             plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+            plt.legend(loc=2)
 
 
         print('Finish')
-        # plt.show()
+        plt.show()
 
         # tf.app.run()
 
