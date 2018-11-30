@@ -70,6 +70,17 @@ In detail, see my code.
 As for caution, the parameters which you wanna optimize must be written by the order(continuous-params, discrete-params).
 
 
+## How to control with Joystick-Controller
+'Qjoypad' package is efficient to use easily.
+The following commands use to treat the package.
+
+~~~
+$ sudo apt-get install qjoypad
+$ qjoypad -notray
+~~~
+
+
+
 
 
 

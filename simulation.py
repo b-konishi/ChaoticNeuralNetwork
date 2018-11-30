@@ -36,10 +36,15 @@ class CNN_Simulator:
     LOG_PATH = '../logdir'
     SOUND_PATH = '../music/'
 
-    def __init__(self):
+    RANDOM_BEHAVIOR = 'RANDOM'
+    CHAOTIC_BEHAVIOR = 'CHAOS'
+
+    def __init__(self, behavior_mode):
         self.MODE = 'opt'
         self.MODE = 'predict'
         self.MODE = 'train'
+
+        self.BEHAVIOR_MODE = behavior_mode
 
         # Save the model
         self.is_save = True
@@ -205,8 +210,8 @@ class CNN_Simulator:
                 tf.summary.histogram('bo', bo)
                 params['bo'] = bo
 
-            # fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
-            fo = tf.matmul(inner_output, Wo) + bo
+            fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
+            # fo = tf.matmul(inner_output, Wo) + bo
             outputs = self.tf_normalize(fo)
             # outputs = fo
 
@@ -833,7 +838,7 @@ class CNN_Simulator:
 
         error, pdf = self.loss(norm_in, outputs, self.seq_len, Mode)
         tf.summary.scalar('error', error)
-        train_step, grad = self.train(error, [Wi, bi, Wo, bo])
+        train_step, grad = self.train(error, [Wi, bi, Wo])
 
         merged = tf.summary.merge_all()
 
@@ -849,11 +854,11 @@ class CNN_Simulator:
         # fig, ax = plt.subplots(1, 1)
         fig = plt.figure(figsize=(10,6))
 
-        event = draw.Event()
+        event = draw.Event(draw.Event.USER_MODE)
 
         # True: Following, False: Creative
-        modeA = False
         modeA = True
+        modeA = False
 
         trajectoryA = []
         trajectoryB = []
@@ -864,17 +869,19 @@ class CNN_Simulator:
         for epoch in range(self.epoch_size):
             print('epoch: ', epoch)
 
-            # colorA, colorB = ('r','b') if modeA else ('g','m')
+            if self.BEHAVIOR_MODE == self.CHAOTIC_BEHAVIOR:
+                feed_dictA = {inputs:outB, Mode:modeA}
+                outA, gradientsA = sessA.run([outputs, grad], feed_dict=feed_dictA)
 
-            feed_dictA = {inputs:outB, Mode:modeA}
-            outA, gradientsA = sessA.run([outputs, grad], feed_dict=feed_dictA)
+                if epoch % 10:
+                    for (g, v) in gradientsA:
+                        print('gradA: ', g[0][0:5])
 
-            if epoch % 10:
-                for (g, v) in gradientsA:
-                    print('gradA: ', g[0][0:5])
+                summaryA, _ = sessA.run([merged, train_step], feed_dictA)
+                writerA.add_summary(summaryA, epoch)
 
-            summaryA, _ = sessA.run([merged, train_step], feed_dictA)
-            writerA.add_summary(summaryA, epoch)
+            if self.BEHAVIOR_MODE == self.RANDOM_BEHAVIOR:
+                outA = np.random.rand(self.seq_len, self.output_units)-0.5
 
             outB = []
             mag = 100
@@ -882,7 +889,6 @@ class CNN_Simulator:
                 event.set_movement(np.array(outA[i]), mag)
 
                 diff, is_drawing = event.get_pos()
-                print(diff)
                 outB.append(diff)
 
                 time.sleep(0.1)
@@ -905,8 +911,8 @@ class CNN_Simulator:
 
 
             
-        plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
-        plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+        plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.3, label='A')
+        plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.3, label='B')
         plt.legend(loc=2)
 
 
@@ -917,7 +923,7 @@ class CNN_Simulator:
 
 
 if __name__ == "__main__":
-    simulator = CNN_Simulator()
+    simulator = CNN_Simulator(CNN_Simulator.CHAOTIC_BEHAVIOR)
     # simulator.learning1()
     # simulator.robot_robot_interaction()
     simulator.human_agent_interaction()

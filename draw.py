@@ -15,8 +15,8 @@ class Event():
 
     CIRCLE_D = 30
 
-    INIT_POS1 = 10
-    INIT_POS2 = DISP_SIZE/2
+    INIT_POS1 = DISP_SIZE/2 - CIRCLE_D*2
+    INIT_POS2 = DISP_SIZE/2 + CIRCLE_D*2
 
 
     # Experimental numeric value...
@@ -77,7 +77,7 @@ class Event():
         pre_pos1, pre_pos2 = [self.INIT_POS1]*2, [self.INIT_POS2]*2
         R = self.CIRCLE_D/2
 
-        TRAJ_MAX = 40
+        TRAJ_MAX = 100
         trajectory1, trajectory2 = deque([]), deque([])
         while True:
             line_interval = self.DISP_SIZE/20
@@ -177,7 +177,6 @@ class Event():
 
             self.dx1, self.dy1 = 0.01, 0.01
 
-            # print('POS: ', self.x1_pos, self.y1_pos)
             # Drawing the Trajectory
             diff = np.sqrt(sum((np.array(pre_pos1)-np.array([self.x1_pos, self.y1_pos]))**2))
             if diff >= line_interval:
@@ -201,8 +200,6 @@ class Event():
         self.TORUS = [False, False]
         diff = [diff[0], -diff[1]]
         self.preget_pos1 = pos
-
-        # print('diff: ', diff)
 
         return diff, self.is_drawing
 
