@@ -2,6 +2,7 @@ import tkinter
 import time
 import threading
 import numpy as np
+import simulation
 from collections import deque
 
 
@@ -14,7 +15,9 @@ class Event():
     CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
 
     CIRCLE_D = 30
+    LINE_WIDTH = 2
 
+    # 1:USER, 2:SYSTEM
     INIT_POS1 = DISP_SIZE/2 - CIRCLE_D*2
     INIT_POS2 = DISP_SIZE/2 + CIRCLE_D*2
 
@@ -23,7 +26,9 @@ class Event():
     ARROW_KEYCODE = {'Up':111, 'Down':116, 'Right':114, 'Left':113}
 
     def __init__(self, mode=USER_MODE):
-        self.MODE = mode
+        self.mode = mode
+        self.system_mode = simulation.CNN_Simulator.IMITATION_MODE
+
         self.frame, self.canvas = [None]*2
 
         self.x1_pos, self.y1_pos = [self.INIT_POS1]*2
@@ -43,6 +48,9 @@ class Event():
 
         animation_thread = threading.Thread(target=self.animation)
         animation_thread.start()
+
+    def get_mode(self):
+        return self.mode
 
 
     def animation(self):
@@ -113,14 +121,16 @@ class Event():
                 # Drawing the Trajectory
                 diff = np.sqrt(sum((np.array(pre_pos2)-np.array([self.x2_pos, self.y2_pos]))**2))
                 if diff >= line_interval:
-                    trajectory2.append(self.canvas.create_line(pre_pos2[0]+R, pre_pos2[1]+R, self.x2_pos+R, self.y2_pos+R, fill='red'))
+                    _line = self.canvas.create_line(pre_pos2[0]+R, pre_pos2[1]+R, self.x2_pos+R, self.y2_pos+R, fill='red', width=self.LINE_WIDTH, dash=((3,3) if self.system_mode==simulation.CNN_Simulator.CREATIVE_MODE else ()))
+                    trajectory2.append(_line)
                     pre_pos2 = [self.x2_pos, self.y2_pos]
                     
                     if len(trajectory2) > TRAJ_MAX:
                         self.canvas.delete(trajectory2.popleft())
 
 
-            if self.MODE == self.RANDOM_MODE:
+            # Random Input
+            if self.mode == self.RANDOM_MODE:
                 line_interval = self.DISP_SIZE/40
                 self.dx1 = (np.random.rand()-0.5)*10
                 self.dy1 = (np.random.rand()-0.5)*10
@@ -131,7 +141,6 @@ class Event():
                 time.sleep(0.1)
 
 
-            # elif self.MODE == self.USER_MODE:
             # User Input with Arrow-Key
             for key in self.history:
                 dx_, dy_ = self.dx1, self.dy1
@@ -180,13 +189,13 @@ class Event():
             # Drawing the Trajectory
             diff = np.sqrt(sum((np.array(pre_pos1)-np.array([self.x1_pos, self.y1_pos]))**2))
             if diff >= line_interval:
-                trajectory1.append(self.canvas.create_line(pre_pos1[0]+R, pre_pos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill='blue'))
+                trajectory1.append(self.canvas.create_line(pre_pos1[0]+R, pre_pos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill='blue', width=self.LINE_WIDTH))
                 pre_pos1 = [self.x1_pos, self.y1_pos]
                 if len(trajectory1) > TRAJ_MAX:
                     self.canvas.delete(trajectory1.popleft())
 
-
-
+    def set_system_mode(self, mode):
+        self.system_mode = mode
 
     def get_pos(self):
         pos = [self.x1_pos, self.y1_pos]

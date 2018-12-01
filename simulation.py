@@ -39,12 +39,23 @@ class CNN_Simulator:
     RANDOM_BEHAVIOR = 'RANDOM'
     CHAOTIC_BEHAVIOR = 'CHAOS'
 
-    def __init__(self, behavior_mode):
-        self.MODE = 'opt'
-        self.MODE = 'predict'
-        self.MODE = 'train'
+    IMITATION_MODE = True
+    CREATIVE_MODE = False
 
-        self.BEHAVIOR_MODE = behavior_mode
+    OPTIMIZE_MODE = 'OPT'
+    PREDICT_MODE = 'PREDICT'
+    TRAIN_MODE = 'TRAIN'
+
+
+    def __init__(self, network_mode=TRAIN_MODE, behavior_mode=CHAOTIC_BEHAVIOR):
+        self.network_mode = network_mode
+
+        self.behavior_mode = behavior_mode
+
+        self.colors = ['r', 'b']
+        self.markers = ['.', '*']
+        self.LINE_WIDTH = 2.0
+        self.MARKER_SIZE = 15
 
         # Save the model
         self.is_save = True
@@ -478,12 +489,12 @@ class CNN_Simulator:
 
     def learning1(self):
 
-        if self.MODE == 'train':
+        if self.network_mode == self.TRAIN_MODE:
             sess = tf.InteractiveSession()
 
             with tf.name_scope('Mode'):
                 Mode = tf.placeholder(dtype = tf.bool, name='Mode')
-                mode = True
+                mode = self.IMITATION_MODE
 
             norm_in, inputs, outputs, params = self.inference(self.seq_len)
             Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
@@ -709,10 +720,10 @@ class CNN_Simulator:
 
             # sess.close()
 
-        elif self.MODE == 'predict':
+        elif self.network_mode == self.PREDICT_MODE:
             self.predict()
 
-        elif self.MODE == 'opt':
+        elif self.network_mode == self.OPTIMIZE_MODE:
             bounds = [{'name': 'kf',    'type': 'continuous',  'domain': (0.0, 100.0)},
                       {'name': 'kr',    'type': 'continuous',  'domain': (0.0, 100.0)},
                       {'name': 'alpha', 'type': 'continuous',  'domain': (0.0, 100.0)}]
@@ -763,8 +774,8 @@ class CNN_Simulator:
         fig = plt.figure(figsize=(10,6))
 
         # True: Following, False: Creative
-        modeA = True
-        modeB = False
+        modeA = self.IMITATION_MODE
+        modeB = self.CREATIVE_MODE
 
         online_update = False
         online_update = True
@@ -773,7 +784,6 @@ class CNN_Simulator:
         trajectoryB = []
 
         outB = np.random.rand(self.seq_len, 2)
-        colorA, colorB = 'r', 'b'
         for epoch in range(self.epoch_size):
             print('epoch: ', epoch)
 
@@ -812,14 +822,14 @@ class CNN_Simulator:
                     trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])-0.5])
                     trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])-0.5])
 
-                    plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
-                    plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+                    plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+self.colors[0], lw=0.1, label='A')
+                    plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+self.colors[1], lw=0.1, label='B')
                     plt.pause(0.01)
 
             
         if not online_update:
-            plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.1, label='A')
-            plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.1, label='B')
+            plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+self.colors[0], lw=0.1, label='A')
+            plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+self.colors[1], lw=0.1, label='B')
 
 
         print('Finish')
@@ -852,35 +862,41 @@ class CNN_Simulator:
         sessA.run(tf.global_variables_initializer())
 
         # fig, ax = plt.subplots(1, 1)
-        fig = plt.figure(figsize=(10,6))
+        # fig = plt.figure(figsize=(10,6))
+        fig, (axL, axR) = plt.subplots(ncols=2, figsize=(10,4))
 
         event = draw.Event(draw.Event.USER_MODE)
 
         # True: Following, False: Creative
-        modeA = True
-        modeA = False
+        modeA = self.CREATIVE_MODE
+        modeA = self.IMITATION_MODE
 
         trajectoryA = []
         trajectoryB = []
 
         outB = np.random.rand(self.seq_len, 2)
-        colorA, colorB = 'r', 'b'
         is_drawing = True
+        _premodeA = modeA
+        mode_switch = [self.epoch_size]
         for epoch in range(self.epoch_size):
             print('epoch: ', epoch)
 
-            if self.BEHAVIOR_MODE == self.CHAOTIC_BEHAVIOR:
+            if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
                 outA, gradientsA = sessA.run([outputs, grad], feed_dict=feed_dictA)
 
-                if epoch % 10:
+                if epoch % 1 == 0:
+                    # modeA = not modeA
+                    # mode_switch.append(epoch)
+                    event.set_system_mode(modeA)
+
                     for (g, v) in gradientsA:
                         print('gradA: ', g[0][0:5])
 
                 summaryA, _ = sessA.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
 
-            if self.BEHAVIOR_MODE == self.RANDOM_BEHAVIOR:
+            if self.behavior_mode == self.RANDOM_BEHAVIOR:
                 outA = np.random.rand(self.seq_len, self.output_units)-0.5
 
             outB = []
@@ -896,25 +912,36 @@ class CNN_Simulator:
             if not is_drawing:
                 break
 
-            # [CAUTION]
-            # In case of Normalization,
-            # the output-trajectory is not same as the actual trajectory I operated, so NOT Normalization.
-            # outB = self.np_normalize(outB)
             outB = np.array(outB)/mag
 
+            # A: SYSTEM, B: USER
             for i in range(self.seq_len):
-                trajectoryA.extend([np.array(trajectoryA[-1] if len(trajectoryA) != 0 else [0,0]) + np.array(outA[i])])
-                trajectoryB.extend([np.array(trajectoryB[-1] if len(trajectoryB) != 0 else [0,0]) + np.array(outB[i])])
+                trajectoryA.extend([list(np.array(trajectoryA[-1] if len(trajectoryA) != 0 else draw.Event.INIT_POS2) + np.array(outA[i]))])
+                trajectoryB.extend([list(np.array(trajectoryB[-1] if len(trajectoryB) != 0 else draw.Event.INIT_POS1) + np.array(outB[i]))])
+
+            if _premodeA != modeA:
+                mode_switch.append(epoch)
+                _premodeA = modeA
 
             # print('[A] value={}'.format(outA))
             # print('[B] value={}'.format(outB))
 
 
-            
-        plt.plot([x[0] for x in trajectoryA], [x[1] for x in trajectoryA], '.-'+colorA, lw=0.3, label='A')
-        plt.plot([x[0] for x in trajectoryB], [x[1] for x in trajectoryB], '.-'+colorB, lw=0.3, label='B')
-        plt.legend(loc=2)
+        mode_switch = np.unique(mode_switch) * self.seq_len
+        print('mode_switch: ', mode_switch)
 
+        # Drawing a start point
+        axL.plot(trajectoryA[0][0],trajectoryA[0][1],'s'+self.colors[0], markersize=self.MARKER_SIZE*1.5)
+        axR.plot(trajectoryB[0][0],trajectoryB[0][1],'s'+self.colors[1], markersize=self.MARKER_SIZE*1.5)
+        for i in range(len(mode_switch)):
+            _i = 0 if i == 0 else mode_switch[i-1]
+            axL.plot(np.array(trajectoryA)[_i:mode_switch[i]+1,0], np.array(trajectoryA)[_i:mode_switch[i]+1,1], self.markers[i%2]+'-'+self.colors[0], lw=self.LINE_WIDTH, markersize=self.MARKER_SIZE, label='A')
+
+            axR.plot(np.array(trajectoryB)[_i:mode_switch[i]+1,0], np.array(trajectoryB)[_i:mode_switch[i]+1,1], self.markers[i%2]+'-'+self.colors[1], lw=self.LINE_WIDTH, markersize=self.MARKER_SIZE, label='B')
+
+        
+        axL.set_title(self.behavior_mode)
+        axR.set_title(event.get_mode())
 
         print('Finish')
         plt.show()
@@ -923,7 +950,7 @@ class CNN_Simulator:
 
 
 if __name__ == "__main__":
-    simulator = CNN_Simulator(CNN_Simulator.CHAOTIC_BEHAVIOR)
+    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.CHAOTIC_BEHAVIOR)
     # simulator.learning1()
     # simulator.robot_robot_interaction()
     simulator.human_agent_interaction()
