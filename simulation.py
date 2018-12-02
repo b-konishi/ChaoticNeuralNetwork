@@ -273,16 +273,16 @@ class CNN_Simulator:
 
             entropy = []
             for i in range(x_units):
-                entropy_ = 0
+                _entropy = 0
                 for j in range(y_units):
-                    x_, y_ = x[:,j], y[:,i]
+                    _x, _y = x[:,j], y[:,i]
                     # TE(y->x)
-                    en_, pdf_ = te.tf_get_TE(x_, y_, self.seq_len)
-                    entropy_ += en_
-                entropy.append(entropy_)
+                    _en, _pdf = te.tf_get_TE(_x, _y, self.seq_len)
+                    _entropy += _en
+                entropy.append(_entropy)
                 tf.summary.scalar('entropy{}'.format(i), entropy[i])
 
-            return -tf.reduce_mean(entropy), pdf_
+            return -tf.reduce_mean(entropy), _pdf
 
         '''
         with tf.name_scope('loss_lyapunov'):
@@ -308,13 +308,13 @@ class CNN_Simulator:
         with tf.name_scope('training'):
             # opt = tf.train.GradientDescentOptimizer(learning_rate=0.001)
             opt = tf.train.AdamOptimizer(0.001)
-            grads_ = opt.compute_gradients(error, var_list=update_params)
-            # grads_ = [(grad1,var1),(grad2,var2),...]
+            _grads = opt.compute_gradients(error, var_list=update_params)
+            # _grads = [(grad1,var1),(grad2,var2),...]
 
             grads = []
-            for g in grads_:
-                g_ = tf.where(tf.is_nan(g[0]), tf.zeros_like(g[0]), g[0])
-                grads.append((g_, g[1]))
+            for g in _grads:
+                _g = tf.where(tf.is_nan(g[0]), tf.zeros_like(g[0]), g[0])
+                grads.append((_g, g[1]))
 
             # training = opt.minimize(grads, var_list=update_params)
             training = opt.apply_gradients(grads)
@@ -494,7 +494,7 @@ class CNN_Simulator:
 
             with tf.name_scope('Mode'):
                 Mode = tf.placeholder(dtype = tf.bool, name='Mode')
-                mode = self.IMITATION_MODE
+                mode = self.CREATIVE_MODE
 
             norm_in, inputs, outputs, params = self.inference(self.seq_len)
             Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
@@ -563,6 +563,7 @@ class CNN_Simulator:
             l_list, te_list, time_list = [], [], []
             out_sound1, out_sound2 = [], []
             in_color, out_color = 'r', 'b'
+            recurrence = []
 
             for epoch in range(self.epoch_size):
                 print('\n[epoch:{}-times]'.format(epoch))
@@ -570,7 +571,7 @@ class CNN_Simulator:
                 feed_dict = {inputs:data, Mode:mode}
 
                 start = time.time()
-                wi, wo, in_, out, error_val = sess.run([Wi, Wo, norm_in, outputs, error], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
+                wi, wo, _in, out, error_val = sess.run([Wi, Wo, norm_in, outputs, error], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
 
                 # run for pdf
                 dx, dxy = sess.run([dmxo, dmxyo], feed_dict=feed_dict, run_metadata=run_metadata, options=run_options)
@@ -578,7 +579,9 @@ class CNN_Simulator:
                 summary, t, gradients = sess.run([merged, train_step, grad], feed_dict)
                 end = time.time()
 
-                indata, outdata = [in_[:,0], out[:,0]]
+                recurrence.extend(out[:,0])
+
+                indata, outdata = [_in[:,0], out[:,0]]
                 out_sound1.extend(out[:,0])
                 out_sound2.extend(out[:,1])
                 print('wi: ', wi[:,0:10])
@@ -618,7 +621,7 @@ class CNN_Simulator:
 
                 if self.is_plot and epoch%(self.epoch_size-1) == 0:
 
-                    in1, in2, out1, out2 = in_[:,0], in_[:,1], out[:,0], out[:,1]
+                    in1, in2, out1, out2 = _in[:,0], _in[:,1], out[:,0], out[:,1]
 
                     if True:
                         plt.figure()
@@ -656,11 +659,25 @@ class CNN_Simulator:
 
                 writer.add_summary(summary, epoch)
 
-            # plt.plot(range(self.epoch_size), (l_list), c='b', lw=1)
+
+            re_plot = my.RecurrencePlot()
+
+            # Recurrence Plot
+            fig2, (ax_sys, ax_sin, ax_rand) = plt.subplots(ncols=3, figsize=(18,6))
+            _r = recurrence[-100:]
+            re_plot.plot(ax_sys, _r)
+            ax_sys.set_title('System')
+            re_plot.plot(ax_sin, np.sin(2*np.pi*5*np.linspace(0,1,len(_r))))
+            ax_sin.set_title('Sin')
+            re_plot.plot(ax_rand, np.random.rand(len(_r)))
+            ax_rand.set_title('Random')
+
+
 
             sampling_freq = 14700
-            my.Sound.save_sound((np.array(out_sound1))*40000, self.SOUND_PATH + 'chaos1.wav', sampling_freq)
-            my.Sound.save_sound((np.array(out_sound2))*40000, self.SOUND_PATH + 'chaos2.wav', sampling_freq)
+            if False:
+                my.Sound.save_sound((np.array(out_sound1))*40000, self.SOUND_PATH + 'chaos1.wav', sampling_freq)
+                my.Sound.save_sound((np.array(out_sound2))*40000, self.SOUND_PATH + 'chaos2.wav', sampling_freq)
 
             if False:
                 plt.figure()
@@ -863,9 +880,10 @@ class CNN_Simulator:
 
         # fig, ax = plt.subplots(1, 1)
         # fig = plt.figure(figsize=(10,6))
-        fig, (axL, axR) = plt.subplots(ncols=2, figsize=(10,4))
+        fig, (axL, axR) = plt.subplots(ncols=2, figsize=(12,6))
 
         event = draw.Event(draw.Event.USER_MODE)
+        re_plot = my.RecurrencePlot()
 
         # True: Following, False: Creative
         modeA = self.CREATIVE_MODE
@@ -878,8 +896,9 @@ class CNN_Simulator:
         is_drawing = True
         _premodeA = modeA
         mode_switch = [self.epoch_size]
+        recurrence = []
         for epoch in range(self.epoch_size):
-            print('epoch: ', epoch)
+            print('epoch:{}, mode:{}'.format(epoch, modeA))
 
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
@@ -891,13 +910,16 @@ class CNN_Simulator:
                     event.set_system_mode(modeA)
 
                     for (g, v) in gradientsA:
-                        print('gradA: ', g[0][0:5])
+                        # print('gradA: ', g[0][0:5])
+                        print(g)
 
                 summaryA, _ = sessA.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
                 outA = np.random.rand(self.seq_len, self.output_units)-0.5
+
+            recurrence.extend(np.array(outA)[:,0])
 
             outB = []
             mag = 100
@@ -919,6 +941,9 @@ class CNN_Simulator:
                 trajectoryA.extend([list(np.array(trajectoryA[-1] if len(trajectoryA) != 0 else draw.Event.INIT_POS2) + np.array(outA[i]))])
                 trajectoryB.extend([list(np.array(trajectoryB[-1] if len(trajectoryB) != 0 else draw.Event.INIT_POS1) + np.array(outB[i]))])
 
+            axL.annotate(str(epoch), trajectoryA[-1])
+            axR.annotate(str(epoch), trajectoryB[-1])
+
             if _premodeA != modeA:
                 mode_switch.append(epoch)
                 _premodeA = modeA
@@ -930,11 +955,13 @@ class CNN_Simulator:
         mode_switch = np.unique(mode_switch) * self.seq_len
         print('mode_switch: ', mode_switch)
 
+
         # Drawing a start point
         axL.plot(trajectoryA[0][0],trajectoryA[0][1],'s'+self.colors[0], markersize=self.MARKER_SIZE*1.5)
         axR.plot(trajectoryB[0][0],trajectoryB[0][1],'s'+self.colors[1], markersize=self.MARKER_SIZE*1.5)
         for i in range(len(mode_switch)):
             _i = 0 if i == 0 else mode_switch[i-1]
+
             axL.plot(np.array(trajectoryA)[_i:mode_switch[i]+1,0], np.array(trajectoryA)[_i:mode_switch[i]+1,1], self.markers[i%2]+'-'+self.colors[0], lw=self.LINE_WIDTH, markersize=self.MARKER_SIZE, label='A')
 
             axR.plot(np.array(trajectoryB)[_i:mode_switch[i]+1,0], np.array(trajectoryB)[_i:mode_switch[i]+1,1], self.markers[i%2]+'-'+self.colors[1], lw=self.LINE_WIDTH, markersize=self.MARKER_SIZE, label='B')
@@ -943,8 +970,19 @@ class CNN_Simulator:
         axL.set_title(self.behavior_mode)
         axR.set_title(event.get_mode())
 
+        # Recurrence Plot
+        fig2, (ax_sys, ax_sin, ax_rand) = plt.subplots(ncols=3, figsize=(18,6))
+        _r = recurrence[-100:]
+        re_plot.plot(ax_sys, _r)
+        ax_sys.set_title('System')
+        re_plot.plot(ax_sin, np.sin(2*np.pi*5*np.linspace(0,1,len(_r))))
+        ax_sin.set_title('Sin')
+        re_plot.plot(ax_rand, np.random.rand(len(_r)))
+        ax_rand.set_title('Random')
+
         print('Finish')
         plt.show()
+
 
         # tf.app.run()
 

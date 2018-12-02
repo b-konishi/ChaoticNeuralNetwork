@@ -60,7 +60,7 @@ class Event():
         self.frame.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.frame.focus_set()
 
-        self.canvas = tkinter.Canvas(self.frame, width=self.CANVAS_SIZE, height=self.CANVAS_SIZE)
+        self.canvas = tkinter.Canvas(self.frame, width=self.CANVAS_SIZE, height=self.CANVAS_SIZE, background='white')
         # self.canvas.pack()
         self.canvas.place(x=self.CANVAS_MARGIN, y=self.CANVAS_MARGIN)
 
