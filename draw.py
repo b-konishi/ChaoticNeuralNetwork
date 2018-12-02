@@ -10,7 +10,7 @@ class Event():
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
 
-    DISP_SIZE = 800
+    DISP_SIZE = 1000
     CANVAS_MARGIN = 10
     CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
 
@@ -85,7 +85,7 @@ class Event():
         pre_pos1, pre_pos2 = [self.INIT_POS1]*2, [self.INIT_POS2]*2
         R = self.CIRCLE_D/2
 
-        TRAJ_MAX = 100
+        TRAJ_MAX = 70
         trajectory1, trajectory2 = deque([]), deque([])
         while True:
             line_interval = self.DISP_SIZE/20

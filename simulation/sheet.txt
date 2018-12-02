@@ -1,0 +1,19 @@
+num / learning_rate / cluster有無 / ErrorFunc
+1 / 0.001 / cluster / mean
+2 / 0.01 / cluster / mean
+3 / 0.1 / cluster / mean
+4 / 1 / cluster / mean
+5 / 0.0001 / cluster / mean
+
+[Accepted]**6 / 0.001 / no cluster / mean
+	6-3 / change pattern
+
+*7 / 0.01 / no cluster / mean
+8 / 0.0001 / no cluster / mean
+
+(*)9 / 0.001 / no cluster / min
+
+10 / 0.001 / no cluster / max
+
+11 / 0.001 / cluster / min
+

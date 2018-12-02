@@ -54,8 +54,8 @@ class CNN_Simulator:
 
         self.colors = ['r', 'b']
         self.markers = ['.', '*']
-        self.LINE_WIDTH = 2.0
-        self.MARKER_SIZE = 15
+        self.LINE_WIDTH = 1.0
+        self.MARKER_SIZE = 10
 
         # Save the model
         self.is_save = True
@@ -221,8 +221,8 @@ class CNN_Simulator:
                 tf.summary.histogram('bo', bo)
                 params['bo'] = bo
 
-            fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
-            # fo = tf.matmul(inner_output, Wo) + bo
+            # fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
+            fo = tf.matmul(inner_output, Wo) + bo
             outputs = self.tf_normalize(fo)
             # outputs = fo
 
@@ -311,6 +311,8 @@ class CNN_Simulator:
             _grads = opt.compute_gradients(error, var_list=update_params)
             # _grads = [(grad1,var1),(grad2,var2),...]
 
+            # If the system cannot update weights(grad:Nan), it occurs an error.
+            # So Nan-value must replace to zeros.
             grads = []
             for g in _grads:
                 _g = tf.where(tf.is_nan(g[0]), tf.zeros_like(g[0]), g[0])
@@ -859,13 +861,14 @@ class CNN_Simulator:
 
         with tf.name_scope('Mode'):
             Mode = tf.placeholder(dtype = tf.bool, name='Mode')
+            tf.summary.scalar('Mode', tf.cast(Mode, tf.int32))
 
         norm_in, inputs, outputs, params = self.inference(self.seq_len)
         Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
 
         error, pdf = self.loss(norm_in, outputs, self.seq_len, Mode)
         tf.summary.scalar('error', error)
-        train_step, grad = self.train(error, [Wi, bi, Wo])
+        train_step, grad = self.train(error, [Wi, bi, Wo, bo])
 
         merged = tf.summary.merge_all()
 
@@ -905,13 +908,8 @@ class CNN_Simulator:
                 outA, gradientsA = sessA.run([outputs, grad], feed_dict=feed_dictA)
 
                 if epoch % 1 == 0:
-                    # modeA = not modeA
-                    # mode_switch.append(epoch)
-                    event.set_system_mode(modeA)
-
                     for (g, v) in gradientsA:
-                        # print('gradA: ', g[0][0:5])
-                        print(g)
+                        print('gradA: ', g[0][0:5])
 
                 summaryA, _ = sessA.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
@@ -920,6 +918,7 @@ class CNN_Simulator:
                 outA = np.random.rand(self.seq_len, self.output_units)-0.5
 
             recurrence.extend(np.array(outA)[:,0])
+
 
             outB = []
             mag = 100
@@ -934,7 +933,21 @@ class CNN_Simulator:
             if not is_drawing:
                 break
 
+
             outB = np.array(outB)/mag
+
+            d1 = np.mean(abs(np.diff(abs(np.diff(outB[:,0])))))
+            d2 = np.mean(abs(np.diff(abs(np.diff(outB[:,1])))))
+            print(np.mean([d1,d2]))
+            '''
+            if np.mean([d1,d2]) < 0.06:
+                print('[Change Mode]', np.mean([d1,d2]))
+                modeA = not modeA
+                mode_switch.append(epoch)
+                event.set_system_mode(modeA)
+            '''
+
+
 
             # A: SYSTEM, B: USER
             for i in range(self.seq_len):
