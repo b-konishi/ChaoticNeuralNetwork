@@ -889,11 +889,13 @@ class CNN_Simulator:
         re_plot = my.RecurrencePlot()
 
         # True: Following, False: Creative
-        modeA = self.CREATIVE_MODE
         modeA = self.IMITATION_MODE
+        modeA = self.CREATIVE_MODE
 
         trajectoryA = []
         trajectoryB = []
+
+        outA_all = []
 
         outB = np.random.rand(self.seq_len, 2)
         is_drawing = True
@@ -918,6 +920,7 @@ class CNN_Simulator:
                 outA = np.random.rand(self.seq_len, self.output_units)-0.5
 
             recurrence.extend(np.array(outA)[:,0])
+            outA_all.extend(list(np.array(outA)[:,0]))
 
 
             outB = []
@@ -983,14 +986,21 @@ class CNN_Simulator:
         axL.set_title(self.behavior_mode)
         axR.set_title(event.get_mode())
 
+        fig3, (ax_s) = plt.subplots(ncols=1, figsize=(18,18))
+        ax_s.plot(outA_all[::3])
+
         # Recurrence Plot
         fig2, (ax_sys, ax_sin, ax_rand) = plt.subplots(ncols=3, figsize=(18,6))
-        _r = recurrence[-100:]
-        re_plot.plot(ax_sys, _r)
+        _r2 = recurrence[100:300]
+        _r = recurrence[100:500:2]
+        _r3 = recurrence[100:700:3]
+        re_plot.plot(ax_sys, _r, eps=0.3)
         ax_sys.set_title('System')
-        re_plot.plot(ax_sin, np.sin(2*np.pi*5*np.linspace(0,1,len(_r))))
+        # re_plot.plot(ax_sin, np.sin(2*np.pi*5*np.linspace(0,1,len(_r))), eps=0.3)
+        re_plot.plot(ax_sin, _r2, eps=0.3)
         ax_sin.set_title('Sin')
-        re_plot.plot(ax_rand, np.random.rand(len(_r)))
+        # re_plot.plot(ax_rand, np.random.rand(len(_r)), eps=0.3)
+        re_plot.plot(ax_rand, _r3, eps=0.3)
         ax_rand.set_title('Random')
 
         print('Finish')
