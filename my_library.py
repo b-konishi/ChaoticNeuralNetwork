@@ -58,6 +58,22 @@ if __name__ == '__main__':
     r.show_image()
 
 
+    f = 3
+    t = np.linspace(0,1,200)
+    data = np.sin(2*np.pi*f*t)
+    data = np.reshape(data, [len(data),1]) if len(np.shape(data)) == 1 else np.array(data)
+    data = (data-np.min(data,axis=0))/(np.max(data,axis=0)-np.min(data,axis=0))
+    mat = np.array([list(np.sqrt(np.sum(np.power(_data-data, 2), axis=(1 if len(np.shape(data))==2 else 0)))) for _data in data])
+
+    # Visualization of matrix
+    eps = 0.1
+    fig, (ax_sin_rp, ax_sin) = plt.subplots(nrows=2, figsize=(6,12))
+    ax_sin_rp.pcolor(mat<eps, cmap='Greys')
+    ax_sin_rp.set_title('$Sin Wave$ $(\\theta_{rp}=0.1)$')
+    ax_sin.plot(t, data, c='black', lw=2)
+    ax_sin.set_xlim(0,1)
+    plt.show()
+
 
 
 
