@@ -3,7 +3,7 @@
 # my library
 import my_library as my
 import chaotic_nn_cell
-import entropy as en
+import probability
 import draw
 
 # Standard
@@ -257,7 +257,7 @@ class CNN_Simulator:
                 tf.summary.scalar('lyapunov'+str(i), lyapunov[i])
 
         with tf.name_scope('TE-Loss'):
-            te = en.TransferEntropy()
+            ic = probability.InfoContent()
 
             # The empty constant Tensor to get unit-num.
             output_units_ = tf.constant(0, shape=[self.output_units])
@@ -277,7 +277,7 @@ class CNN_Simulator:
                 for j in range(y_units):
                     _x, _y = x[:,j], y[:,i]
                     # TE(y->x)
-                    _en, _pdf = te.tf_get_TE(_x, _y, self.seq_len)
+                    _en, _pdf = ic.tf_get_TE(_x, _y, self.seq_len)
                     _entropy += _en
                 entropy.append(_entropy)
                 tf.summary.scalar('entropy{}'.format(i), entropy[i])
@@ -554,7 +554,7 @@ class CNN_Simulator:
                 plt.show()
             '''
             
-            te = en.TransferEntropy() 
+            ic = probability.InfoContent() 
             
             lcluster = 500
             epoch_cluster = math.ceil(lcluster/self.seq_len)
@@ -565,7 +565,7 @@ class CNN_Simulator:
             l_list, te_list, time_list = [], [], []
             out_sound1, out_sound2 = [], []
             in_color, out_color = 'r', 'b'
-            recurrence = []
+            allout = []
 
             for epoch in range(self.epoch_size):
                 print('\n[epoch:{}-times]'.format(epoch))
@@ -581,7 +581,7 @@ class CNN_Simulator:
                 summary, t, gradients = sess.run([merged, train_step, grad], feed_dict)
                 end = time.time()
 
-                recurrence.extend(out[:,0])
+                allout.extend(out[:,0])
 
                 indata, outdata = [_in[:,0], out[:,0]]
                 out_sound1.extend(out[:,0])
@@ -604,7 +604,7 @@ class CNN_Simulator:
                     
 
                 # l_list.append(l[0])
-                te_list.append(te.np_get_TE(outdata, indata))
+                te_list.append(ic.np_get_TE(outdata, indata))
 
                 elapsed_time = end-start
                 time_list.append(elapsed_time)
@@ -617,7 +617,7 @@ class CNN_Simulator:
                     print("elapsed_time: {}sec/epoch".format(int(elapsed_time)))
                     print("Estimated-reminded-time: {}sec({}sec/{}sec)".format(int(remineded_time), int(cumulative_time), int(total_time)))
                     print("error:{}".format(error_val))
-                    print("Transfer-Entropy: ", te.np_get_TE(outdata, indata))
+                    print("Transfer-Entropy: ", ic.np_get_TE(outdata, indata))
                     # print(d)
                     # print(out)
 
@@ -666,7 +666,7 @@ class CNN_Simulator:
 
             # Recurrence Plot
             fig2, (ax_sys, ax_sin, ax_rand) = plt.subplots(ncols=3, figsize=(18,6))
-            _r = recurrence[-100:]
+            _r = allout[-100:]
             re_plot.plot(ax_sys, _r)
             ax_sys.set_title('System')
             re_plot.plot(ax_sin, np.sin(2*np.pi*5*np.linspace(0,1,len(_r))))
@@ -895,13 +895,13 @@ class CNN_Simulator:
         trajectoryA = []
         trajectoryB = []
 
-        outA_all = []
+        # outA_all = []
 
         outB = np.random.rand(self.seq_len, 2)
         is_drawing = True
         _premodeA = modeA
         mode_switch = [self.epoch_size]
-        recurrence = []
+        allout = []
         for epoch in range(self.epoch_size):
             print('epoch:{}, mode:{}'.format(epoch, modeA))
 
@@ -919,8 +919,8 @@ class CNN_Simulator:
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
                 outA = np.random.rand(self.seq_len, self.output_units)-0.5
 
-            recurrence.extend(np.array(outA)[:,0])
-            outA_all.extend(list(np.array(outA)[:,0]))
+            allout.extend(list(np.array(outA)[:,0]))
+            # outA_all.extend(list(np.array(outA)[:,0]))
 
 
             outB = []
@@ -971,6 +971,7 @@ class CNN_Simulator:
         mode_switch = np.unique(mode_switch) * self.seq_len
         print('mode_switch: ', mode_switch)
 
+        print('allout:', len(allout))
 
         # Drawing a start point
         axL.plot(trajectoryA[0][0],trajectoryA[0][1],'s'+self.colors[0], markersize=self.MARKER_SIZE*1.5)
@@ -986,22 +987,53 @@ class CNN_Simulator:
         axL.set_title(self.behavior_mode)
         axR.set_title(event.get_mode())
 
+        '''
         fig3, (ax_s) = plt.subplots(ncols=1, figsize=(18,18))
         ax_s.plot(outA_all[::3])
+        '''
+
+        
+
+
+        fig3, (ax_mic, ax_delay) = plt.subplots(ncols=2, figsize=(12,6))
+        ic = probability.InfoContent()
+        delayed_tau, mic = ic.get_tau(allout[self.seq_len:], max_tau=20)
+
+        print(delayed_tau)
+        ax_mic.plot(range(1,len(mic)+1), mic)
+        ax_mic.set_title('Mutual Information Content')
+
+
+
+        delayed_dim = 2
+        delayed_out = []
+        delayed_len = int((len(allout)-(delayed_dim-1))/delayed_tau)
+        for i in range(delayed_dim):
+            delayed_out.append(allout[delayed_dim-1-i::delayed_tau][:delayed_len])
+
+        delayed_out = np.array(delayed_out).T
+        print(delayed_out)
+
+        ax_delay.set_title('delayed-out')
+        ax_delay.plot(delayed_out[:,0][100:130], delayed_out[:,1][100:130], '.-')
+
 
         # Recurrence Plot
         fig2, (ax_sys, ax_sin, ax_rand) = plt.subplots(ncols=3, figsize=(18,6))
-        _r2 = recurrence[100:300]
-        _r = recurrence[100:500:2]
-        _r3 = recurrence[100:700:3]
+        _r2 = allout[100:300]
+        _r = delayed_out[100:500:2]
+        print('_r', _r)
+        _r3 = allout[100:700:3]
         re_plot.plot(ax_sys, _r, eps=0.3)
         ax_sys.set_title('System')
+        '''
         # re_plot.plot(ax_sin, np.sin(2*np.pi*5*np.linspace(0,1,len(_r))), eps=0.3)
         re_plot.plot(ax_sin, _r2, eps=0.3)
         ax_sin.set_title('Sin')
         # re_plot.plot(ax_rand, np.random.rand(len(_r)), eps=0.3)
         re_plot.plot(ax_rand, _r3, eps=0.3)
         ax_rand.set_title('Random')
+        '''
 
         print('Finish')
         plt.show()
@@ -1021,6 +1053,4 @@ if __name__ == "__main__":
     # calc_thread.daemon = True
     calc_thread.start()
     '''
-
-
 

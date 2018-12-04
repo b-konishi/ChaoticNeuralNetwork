@@ -9,10 +9,73 @@ tfd = tfp.distributions
 
 import matplotlib.pyplot as plt
 
-class TransferEntropy:
+class InfoContent:
 
     def __init__(self):
         pass
+
+    def get_prob2(self, x, y):
+        px, py, p = dict(), dict(), dict()
+
+        for (xi, yi) in zip(x, y):
+            px[xi] = px.get(xi,0) + 1/len(x)
+            py[yi] = py.get(yi,0) + 1/len(y)
+
+            p[(xi,yi)] = p.get((xi,yi),0) + 1/min(len(x),len(y))
+        
+        return (px, py, p)
+
+    def get_IC(self, prob):
+        icx, icy, ic = dict(), dict(), dict()
+        px, py, p = prob
+
+        for (xi, pi) in px.items():
+            icx[xi] = -math.log(pi, 2)
+
+        for (yi, pi) in py.items():
+            icy[yi] = -math.log(pi, 2)
+
+        for ((xi,yi), pi) in p.items():
+            ic[(xi,yi)] = -math.log(pi, 2)
+
+        return (icx, icy, ic)
+
+
+    def get_EN(self, prob):
+        enx, eny, en = 0, 0, 0
+        px, py, p = prob
+        icx, icy, ic = self.get_IC(prob)
+
+        for (xi, pi) in px.items():
+            enx = enx + pi*icx.get(xi)
+
+        for (yi, pi) in py.items():
+            eny = eny + pi*icy.get(yi)
+
+        for ((xi,yi), pi) in p.items():
+            en = en + pi*ic.get((xi,yi))
+
+        return (enx, eny, en)
+
+    def get_MIC(self, x, y):
+        prob = self.get_prob2(x,y)
+        enx, eny, en = self.get_EN(prob)
+
+        return enx + eny - en
+
+    def get_tau(self, data, max_tau):
+        mic = []
+        tau = None
+        for _tau in range(1,max_tau):
+            unlaged = data[:-_tau]
+            laged = data[_tau:]
+            mic.append(self.get_MIC(unlaged, laged))
+
+            if tau is None and len(mic)>1 and mic[-2] < mic[-1]:
+                tau = _tau-1
+
+        return tau, mic
+
 
     # TF(x<=y)
     def np_get_TE(self, x, y):
@@ -112,5 +175,27 @@ class TransferEntropy:
 
         return entropy, pdf
 
+if __name__ == '__main__':
+    ic = InfoContent()
+    
+    x = np.random.rand(100)*100
+    x = x+x
+    x = [1,1,1,1,1,0,0,0,0,0,1,1,1]
+
+    mic = []
+    tau = None
+    for _tau in range(1,5+1):
+        unlaged = x[:-_tau]
+        laged = x[_tau:]
+        print(unlaged, laged)
+        mic.append(ic.get_MIC(unlaged, laged))
+
+        if tau is None and len(mic)>1 and mic[-2] < mic[-1]:
+            print(len(mic))
+            tau = _tau-1
+
+    print(mic, tau)
+    plt.plot(range(1,len(mic)+1), mic)
+    plt.show()
 
 

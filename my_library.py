@@ -38,9 +38,10 @@ class RecurrencePlot:
         pass
 
     def plot(self, ax, data, eps=0.2):
+        dim = len(data)
         data = np.array(data)
-        data = (data-min(data))/(max(data)-min(data))
-        mat = np.array([list(abs(_data-data)) for _data in data])
+        data = (data-np.min(data,axis=0))/(np.max(data,axis=0)-np.min(data,axis=0))
+        mat = np.array([list(np.sqrt(np.sum(np.power(_data-data, 2),axis=1))) for _data in data])
         ax.pcolor(mat<eps, cmap='Greys')
 
 
