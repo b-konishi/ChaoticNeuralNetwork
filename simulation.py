@@ -55,7 +55,7 @@ class CNN_Simulator:
         self.colors = ['r', 'b']
         self.markers = ['.', '*']
         self.LINE_WIDTH = 1.0
-        self.MARKER_SIZE = 10
+        self.MARKER_SIZE = 5
 
         # Save the model
         self.is_save = True
@@ -889,19 +889,17 @@ class CNN_Simulator:
         re_plot = my.RecurrencePlot()
 
         # True: Following, False: Creative
-        modeA = self.IMITATION_MODE
         modeA = self.CREATIVE_MODE
+        modeA = self.IMITATION_MODE
 
         trajectoryA = []
         trajectoryB = []
-
-        # outA_all = []
 
         outB = np.random.rand(self.seq_len, 2)
         is_drawing = True
         _premodeA = modeA
         mode_switch = [self.epoch_size]
-        allout = []
+        outA_all, outB_all = [], []
         for epoch in range(self.epoch_size):
             print('epoch:{}, mode:{}'.format(epoch, modeA))
 
@@ -919,10 +917,6 @@ class CNN_Simulator:
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
                 outA = np.random.rand(self.seq_len, self.output_units)-0.5
 
-            allout.extend(list(np.array(outA)[:,0]))
-            # outA_all.extend(list(np.array(outA)[:,0]))
-
-
             outB = []
             mag = 100
             for i in range(self.seq_len):
@@ -939,16 +933,20 @@ class CNN_Simulator:
 
             outB = np.array(outB)/mag
 
+            outA_all.extend(list(np.array(outA)[:,0]))
+            outB_all.extend(list(np.array(outB)[:,0]))
+
+
+            # Mesuring the amount of activity
             d1 = np.mean(abs(np.diff(abs(np.diff(outB[:,0])))))
             d2 = np.mean(abs(np.diff(abs(np.diff(outB[:,1])))))
             print(np.mean([d1,d2]))
-            '''
-            if np.mean([d1,d2]) < 0.06:
+
+            if np.mean([d1,d2]) < 0.07:
                 print('[Change Mode]', np.mean([d1,d2]))
                 modeA = not modeA
                 mode_switch.append(epoch)
                 event.set_system_mode(modeA)
-            '''
 
 
 
@@ -957,6 +955,7 @@ class CNN_Simulator:
                 trajectoryA.extend([list(np.array(trajectoryA[-1] if len(trajectoryA) != 0 else draw.Event.INIT_POS2) + np.array(outA[i]))])
                 trajectoryB.extend([list(np.array(trajectoryB[-1] if len(trajectoryB) != 0 else draw.Event.INIT_POS1) + np.array(outB[i]))])
 
+            # Show characters on data points
             axL.annotate(str(epoch), trajectoryA[-1])
             axR.annotate(str(epoch), trajectoryB[-1])
 
@@ -971,7 +970,7 @@ class CNN_Simulator:
         mode_switch = np.unique(mode_switch) * self.seq_len
         print('mode_switch: ', mode_switch)
 
-        print('allout:', len(allout))
+        print('outA_all:', len(outA_all))
 
         # Drawing a start point
         axL.plot(trajectoryA[0][0],trajectoryA[0][1],'s'+self.colors[0], markersize=self.MARKER_SIZE*1.5)
@@ -987,53 +986,39 @@ class CNN_Simulator:
         axL.set_title(self.behavior_mode)
         axR.set_title(event.get_mode())
 
-        '''
-        fig3, (ax_s) = plt.subplots(ncols=1, figsize=(18,18))
-        ax_s.plot(outA_all[::3])
-        '''
-
-        
-
 
         fig3, (ax_mic, ax_delay) = plt.subplots(ncols=2, figsize=(12,6))
         ic = probability.InfoContent()
-        delayed_tau, mic = ic.get_tau(allout[self.seq_len:], max_tau=20)
+        delayed_tau, mic = ic.get_tau(outA_all[self.seq_len:], max_tau=20)
 
-        print(delayed_tau)
+        print('tau: ', delayed_tau)
         ax_mic.plot(range(1,len(mic)+1), mic)
-        ax_mic.set_title('Mutual Information Content')
+        ax_mic.set_title('Mutual Information Content(tau:{})'.format(delayed_tau))
 
-
-
-        delayed_dim = 2
+        delayed_dim = 3
         delayed_out = []
-        delayed_len = int((len(allout)-(delayed_dim-1))/delayed_tau)
-        for i in range(delayed_dim):
-            delayed_out.append(allout[delayed_dim-1-i::delayed_tau][:delayed_len])
+        for i in reversed(range(delayed_dim)):
+            delayed_out.append(np.roll(outA_all, -i*delayed_tau)[:-delayed_tau])
 
         delayed_out = np.array(delayed_out).T
-        print(delayed_out)
 
         ax_delay.set_title('delayed-out')
-        ax_delay.plot(delayed_out[:,0][100:130], delayed_out[:,1][100:130], '.-')
-
+        ax_delay.plot(delayed_out[:,0], delayed_out[:,1], '.-')
 
         # Recurrence Plot
         fig2, (ax_sys, ax_sin, ax_rand) = plt.subplots(ncols=3, figsize=(18,6))
-        _r2 = allout[100:300]
-        _r = delayed_out[100:500:2]
-        print('_r', _r)
-        _r3 = allout[100:700:3]
-        re_plot.plot(ax_sys, _r, eps=0.3)
+
+        _r = delayed_out[100:300]
+        re_plot.plot(ax_sys, _r)
         ax_sys.set_title('System')
-        '''
-        # re_plot.plot(ax_sin, np.sin(2*np.pi*5*np.linspace(0,1,len(_r))), eps=0.3)
-        re_plot.plot(ax_sin, _r2, eps=0.3)
+
+        # re_plot.plot(ax_sin, _r, eps=0.3)
+        re_plot.plot(ax_sin, np.sin(2*np.pi*5*np.linspace(0,1,len(_r))))
         ax_sin.set_title('Sin')
-        # re_plot.plot(ax_rand, np.random.rand(len(_r)), eps=0.3)
-        re_plot.plot(ax_rand, _r3, eps=0.3)
+
+        # re_plot.plot(ax_rand, _r, eps=0.4)
+        re_plot.plot(ax_rand, np.random.rand(len(_r)))
         ax_rand.set_title('Random')
-        '''
 
         print('Finish')
         plt.show()

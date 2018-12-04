@@ -63,6 +63,7 @@ class InfoContent:
 
         return enx + eny - en
 
+    # time-delayed-content on phase space
     def get_tau(self, data, max_tau):
         mic = []
         tau = None

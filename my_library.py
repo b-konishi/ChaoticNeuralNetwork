@@ -37,12 +37,18 @@ class RecurrencePlot:
     def __init__(self):
         pass
 
-    def plot(self, ax, data, eps=0.2):
-        dim = len(data)
-        data = np.array(data)
+    def plot(self, ax, data, eps=0.4):
+        data = np.reshape(data, [len(data),1]) if len(np.shape(data)) == 1 else np.array(data)
         data = (data-np.min(data,axis=0))/(np.max(data,axis=0)-np.min(data,axis=0))
-        mat = np.array([list(np.sqrt(np.sum(np.power(_data-data, 2),axis=1))) for _data in data])
+        mat = np.array([list(np.sqrt(np.sum(np.power(_data-data, 2), axis=(1 if len(np.shape(data))==2 else 0)))) for _data in data])
+
+        # Visualization of matrix
         ax.pcolor(mat<eps, cmap='Greys')
+
+class DataProcessing:
+
+    def __init__(self):
+        pass
 
 
 if __name__ == '__main__':
@@ -50,5 +56,12 @@ if __name__ == '__main__':
     r = RecurrencePlot()
     r.plot(x)
     r.show_image()
+
+
+
+
+
+
+
 
 
