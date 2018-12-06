@@ -75,6 +75,10 @@ class InfoContent:
             if tau is None and len(mic)>1 and mic[-2] < mic[-1]:
                 tau = _tau-1
 
+        if tau is None:
+            print('[Warning] tau is None.')
+            tau = 0
+
         return tau, mic
 
 

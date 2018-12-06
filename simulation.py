@@ -889,14 +889,15 @@ class CNN_Simulator:
         re_plot = my.RecurrencePlot()
 
         # True: Following, False: Creative
-        modeA = self.CREATIVE_MODE
         modeA = self.IMITATION_MODE
+        modeA = self.CREATIVE_MODE
 
         trajectoryA = []
         trajectoryB = []
 
         outB = np.random.rand(self.seq_len, 2)
         is_drawing = True
+        is_changemode = False
         _premodeA = modeA
         mode_switch = [self.epoch_size]
         outA_all, outB_all = [], []
@@ -942,7 +943,7 @@ class CNN_Simulator:
             d2 = np.mean(abs(np.diff(abs(np.diff(outB[:,1])))))
             print(np.mean([d1,d2]))
 
-            if np.mean([d1,d2]) < 0.07:
+            if is_changemode and np.mean([d1,d2]) < 0.07:
                 print('[Change Mode]', np.mean([d1,d2]))
                 modeA = not modeA
                 mode_switch.append(epoch)
@@ -992,8 +993,10 @@ class CNN_Simulator:
         delayed_tau, mic = ic.get_tau(outA_all[self.seq_len:], max_tau=20)
 
         print('tau: ', delayed_tau)
-        ax_mic.plot(range(1,len(mic)+1), mic)
+        ax_mic.plot(range(1,len(mic)+1), mic, c='black')
         ax_mic.set_title('Mutual Information Content(tau:{})'.format(delayed_tau))
+        ax_mic.set_xticks(np.arange(0, 20+1, 1))
+        ax_mic.grid()
 
         delayed_dim = 3
         delayed_out = []
