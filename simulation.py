@@ -889,8 +889,8 @@ class CNN_Simulator:
         re_plot = my.RecurrencePlot()
 
         # True: Following, False: Creative
-        modeA = self.IMITATION_MODE
         modeA = self.CREATIVE_MODE
+        modeA = self.IMITATION_MODE
 
         trajectoryA = []
         trajectoryB = []
@@ -934,13 +934,16 @@ class CNN_Simulator:
 
             outB = np.array(outB)/mag
 
-            outA_all.extend(list(np.array(outA)[:,0]))
-            outB_all.extend(list(np.array(outB)[:,0]))
+            # outA_all.extend(list(np.array(outA)[:,0]))
+            # outB_all.extend(list(np.array(outB)[:,0]))
+
+            outA_all.extend(outA)
+            outB_all.extend(outB)
 
 
             # Mesuring the amount of activity
-            d1 = np.mean(abs(np.diff(abs(np.diff(outB[:,0])))))
-            d2 = np.mean(abs(np.diff(abs(np.diff(outB[:,1])))))
+            d1 = np.mean(abs(np.diff(outB[:,0])))
+            d2 = np.mean(abs(np.diff(outB[:,1])))
             print(np.mean([d1,d2]))
 
             if is_changemode and np.mean([d1,d2]) < 0.07:
@@ -971,11 +974,11 @@ class CNN_Simulator:
         mode_switch = np.unique(mode_switch) * self.seq_len
         print('mode_switch: ', mode_switch)
 
-        print('outA_all:', len(outA_all))
 
         # Drawing a start point
         axL.plot(trajectoryA[0][0],trajectoryA[0][1],'s'+self.colors[0], markersize=self.MARKER_SIZE*1.5)
         axR.plot(trajectoryB[0][0],trajectoryB[0][1],'s'+self.colors[1], markersize=self.MARKER_SIZE*1.5)
+
         for i in range(len(mode_switch)):
             _i = 0 if i == 0 else mode_switch[i-1]
 
@@ -987,10 +990,22 @@ class CNN_Simulator:
         axL.set_title(self.behavior_mode)
         axR.set_title(event.get_mode())
 
+        # outA: system, outB: user
+        print('outA_all:', len(outA_all))
+        outA_all = np.array(outA_all[:-self.seq_len*3])
+        outB_all = np.array(outB_all[:-self.seq_len*3])
+
+        fig4, (ax_vec1, ax_vec2) = plt.subplots(ncols=2, figsize=(12,6))
+        ax_vec1.quiver(outB_all[:,0], outB_all[:,1], outA_all[:,0], outA_all[:,1], angles='xy')
+        ax_vec1.set_title('system-vector')
+        ax_vec2.quiver(outA_all[:,0], outA_all[:,1], outB_all[:,0], outB_all[:,1], angles='xy')
+        ax_vec2.set_title('user-vector')
+        # ax_vec.quiver(outB_all[:,0], outB_all[:,1], outB_all[:,0], outB_all[:,1], angles='xy')
+
 
         fig3, (ax_mic, ax_delay) = plt.subplots(ncols=2, figsize=(12,6))
         ic = probability.InfoContent()
-        delayed_tau, mic = ic.get_tau(outA_all[self.seq_len:], max_tau=20)
+        delayed_tau, mic = ic.get_tau(outA_all[:,0][self.seq_len:], max_tau=20)
 
         print('tau: ', delayed_tau)
         ax_mic.plot(range(1,len(mic)+1), mic, c='black')
@@ -1001,7 +1016,7 @@ class CNN_Simulator:
         delayed_dim = 3
         delayed_out = []
         for i in reversed(range(delayed_dim)):
-            delayed_out.append(np.roll(outA_all, -i*delayed_tau)[:-delayed_tau])
+            delayed_out.append(np.roll(outA_all[:,0], -i*delayed_tau)[:len(outA_all)-delayed_tau])
 
         delayed_out = np.array(delayed_out).T
 
@@ -1011,7 +1026,7 @@ class CNN_Simulator:
         # Recurrence Plot
         fig2, (ax_sys, ax_sin, ax_rand) = plt.subplots(ncols=3, figsize=(18,6))
 
-        _r = delayed_out[100:300]
+        _r = delayed_out[0:100]
         re_plot.plot(ax_sys, _r)
         ax_sys.set_title('System')
 

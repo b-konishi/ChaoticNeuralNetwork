@@ -121,7 +121,7 @@ class InfoContent:
     def tf_get_TE(self, x, y, length):
         # print('\n##### TRANSFER ENTROPY FOR TENSORFLOW #####')
 
-        tau = 5
+        tau = 0
         n = length-tau
 
         # N = int(np.log2(n) + 1)
@@ -138,20 +138,20 @@ class InfoContent:
                 tfd.MixtureSameFamily(
                     mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
-                        loc=tf.transpose([x[tau:], x[:-tau], y[:-tau]]),
+                        loc=tf.transpose([x[tau:], x[:length-tau], y[:length-tau]]),
                         scale_diag=[[scale]*3])),
                 reinterpreted_batch_ndims=0)
 
         dmx = tfd.MixtureSameFamily(
                 mixture_distribution=tfd.Categorical(probs=[1/n]*n),
-                components_distribution=tfd.Normal(loc=x[:-tau], scale=scale)
+                components_distribution=tfd.Normal(loc=x[:length-tau], scale=scale)
                 )
 
         dmxx = tfd.Independent(
                 tfd.MixtureSameFamily(
                     mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
-                        loc=tf.transpose([x[tau:],x[:-tau]]),
+                        loc=tf.transpose([x[tau:],x[:length-tau]]),
                         scale_diag=[scale]*2)),
                 reinterpreted_batch_ndims=0)
 
@@ -159,7 +159,7 @@ class InfoContent:
                 tfd.MixtureSameFamily(
                     mixture_distribution=tfd.Categorical(probs=[1/n]*n),
                     components_distribution=tfd.MultivariateNormalDiag(
-                        loc=tf.transpose([x[:-tau],y[:-tau]]),
+                        loc=tf.transpose([x[:length-tau],y[:length-tau]]),
                         scale_diag=[scale]*2)),
                 reinterpreted_batch_ndims=0)
 
