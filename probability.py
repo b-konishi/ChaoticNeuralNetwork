@@ -121,7 +121,7 @@ class InfoContent:
     def tf_get_TE(self, x, y, length):
         # print('\n##### TRANSFER ENTROPY FOR TENSORFLOW #####')
 
-        tau = 0
+        tau = 1
         n = length-tau
 
         # N = int(np.log2(n) + 1)

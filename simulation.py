@@ -271,6 +271,8 @@ class CNN_Simulator:
             y_units = int(y_units_.get_shape()[0])
             print('x_units: {}, y_units: {}'.format(x_units, y_units))
 
+            # x_units, y_units = 1,1
+
             entropy = []
             for i in range(x_units):
                 _entropy = 0
@@ -992,15 +994,31 @@ class CNN_Simulator:
 
         # outA: system, outB: user
         print('outA_all:', len(outA_all))
-        outA_all = np.array(outA_all[:-self.seq_len*3])
-        outB_all = np.array(outB_all[:-self.seq_len*3])
+        outA_all = np.array(outA_all)
+        outB_all = np.array(outB_all)
 
-        fig4, (ax_vec1, ax_vec2) = plt.subplots(ncols=2, figsize=(12,6))
-        ax_vec1.quiver(outB_all[:,0], outB_all[:,1], outA_all[:,0], outA_all[:,1], angles='xy')
-        ax_vec1.set_title('system-vector')
-        ax_vec2.quiver(outA_all[:,0], outA_all[:,1], outB_all[:,0], outB_all[:,1], angles='xy')
-        ax_vec2.set_title('user-vector')
+        fig5, ax_sig = plt.subplots(ncols=1, figsize=(6,6))
+        ax_sig.plot(outA_all[:,0], c='red')
+        ax_sig.plot(outB_all[:,0], c='blue')
+
+        fig4, (ax_vec1) = plt.subplots(ncols=1, figsize=(6,6))
+        # ax_vec1.quiver(outB_all[:,0], np.zeros(len(outB_all)), outA_all[:,0], np.zeros(len(outB_all)), angles='xy')
+        ax_vec1.quiver(outB_all[self.seq_len*1:self.seq_len*3][:,0], outB_all[self.seq_len*1:self.seq_len*3][:,1], outA_all[self.seq_len*1:self.seq_len*3][:,0], outA_all[self.seq_len*1:self.seq_len*3][:,1], angles='xy', scale_units='xy')
+        # ax_vec1.set_title('system-vector')
+
+        '''
+        ax_vec2.quiver(outB_all[self.seq_len*3:self.seq_len*5][:,0], outB_all[self.seq_len*3:self.seq_len*5][:,1], outA_all[self.seq_len*3:self.seq_len*5][:,0], outA_all[self.seq_len*3:self.seq_len*5][:,1], angles='xy', scale_units='xy')
+        # ax_vec2.set_title('user-vector')
+
+        ax_vec3.quiver(outB_all[self.seq_len*5:self.seq_len*7][:,0], outB_all[self.seq_len*5:self.seq_len*7][:,1], outA_all[self.seq_len*5:self.seq_len*7][:,0], outA_all[self.seq_len*5:self.seq_len*7][:,1], angles='xy', scale_units='xy')
         # ax_vec.quiver(outB_all[:,0], outB_all[:,1], outB_all[:,0], outB_all[:,1], angles='xy')
+        '''
+
+
+        _o = []
+        for i in range(int(len(outA_all)/self.seq_len)):
+            _o.append(outA_all[self.seq_len*i:self.seq_len*(i+1)][:,0])
+        print('variance: ', np.mean(np.var(_o, 0)))
 
 
         fig3, (ax_mic, ax_delay) = plt.subplots(ncols=2, figsize=(12,6))

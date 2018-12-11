@@ -85,7 +85,7 @@ class Event():
         pre_pos1, pre_pos2 = [self.INIT_POS1]*2, [self.INIT_POS2]*2
         R = self.CIRCLE_D/2
 
-        TRAJ_MAX = 70
+        TRAJ_MAX = 50
         trajectory1, trajectory2 = deque([]), deque([])
         while True:
             line_interval = self.DISP_SIZE/20
