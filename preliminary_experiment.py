@@ -16,6 +16,7 @@ class Event():
     # DISP_SIZE = 1000
     # CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
 
+    # interactive time[sec]
     INTERACTIVE_TIME = 10
 
     CIRCLE_D = 30
@@ -53,11 +54,11 @@ class Event():
 
 
     def animation(self):
-        global frame, canvas, canvas_w, canvas_h, init_pos1, init_pos2, circle1, circle2
+        # global frame, canvas, canvas_w, canvas_h, init_pos1, init_pos2, start_time
 
         self.frame = tkinter.Tk()
         self.frame.attributes('-fullscreen', True)
-        # self.frame.title("Title")
+        self.frame.title("Preliminary experiment")
         # self.frame.geometry(str(self.DISP_SIZE)+'x'+str(self.DISP_SIZE))
         self.frame.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.frame.focus_set()
@@ -114,6 +115,10 @@ class Event():
             writer.writerow(['time[ms]','x1','y1','x2','y2'])
             start_time = datetime.datetime.now()
             while True:
+                self.canvas.delete('time')
+                t = self.INTERACTIVE_TIME - int((datetime.datetime.now()-start_time).total_seconds())
+                self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time')
+
                 self.canvas.coords('t_circle', self.update())
                 self.frame.update()
                 time.sleep(0.020)
@@ -131,6 +136,7 @@ class Event():
         
 
         self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='FINISH', font=('FixedSys',36), tags='text')
+        self.canvas.delete('time')
         while not self.KEYCODE['Enter'] in self.history:
             self.frame.update()
 
@@ -159,6 +165,7 @@ class Event():
             elif key == self.KEYCODE['D']:
                 self.pos2[0] += self.DIFF
 
+        # Edge processing
         self.pos1 = np.where(np.sign(self.pos1)==-1, 0, self.pos1)
         self.pos1 = np.where(np.array(self.pos1)>[self.canvas_w-self.CIRCLE_D,self.canvas_h-self.CIRCLE_D], [self.canvas_w-self.CIRCLE_D,self.canvas_h-self.CIRCLE_D], self.pos1)
         self.pos2 = np.where(np.sign(self.pos2)==-1, 0, self.pos2)
