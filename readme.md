@@ -79,6 +79,14 @@ $ sudo apt-get install qjoypad
 $ qjoypad -notray
 ~~~
 
+## How to install simplescreenrecorder
+simplescreenrecorder is to capture a screen.
+
+~~~
+$ sudo add-apt-repository ppa:maarten-baert/simplescreenrecorder
+$ sudo apt-get update
+$ sudo apt-get install simplescreenrecorder
+~~~
 
 
 
