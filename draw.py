@@ -10,6 +10,8 @@ class Event():
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
 
+    IS_TRAJ = False
+
     DISP_SIZE = 1000
     CANVAS_MARGIN = 10
     CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
@@ -119,14 +121,15 @@ class Event():
                 self.canvas.move(obj2, dx2_, dy2_)
 
                 # Drawing the Trajectory
-                diff = np.sqrt(sum((np.array(pre_pos2)-np.array([self.x2_pos, self.y2_pos]))**2))
-                if diff >= line_interval:
-                    _line = self.canvas.create_line(pre_pos2[0]+R, pre_pos2[1]+R, self.x2_pos+R, self.y2_pos+R, fill='red', width=self.LINE_WIDTH, dash=((3,3) if self.system_mode==simulation.CNN_Simulator.CREATIVE_MODE else ()))
-                    trajectory2.append(_line)
-                    pre_pos2 = [self.x2_pos, self.y2_pos]
-                    
-                    if len(trajectory2) > TRAJ_MAX:
-                        self.canvas.delete(trajectory2.popleft())
+                if self.IS_TRAJ:
+                    diff = np.sqrt(sum((np.array(pre_pos2)-np.array([self.x2_pos, self.y2_pos]))**2))
+                    if diff >= line_interval:
+                        _line = self.canvas.create_line(pre_pos2[0]+R, pre_pos2[1]+R, self.x2_pos+R, self.y2_pos+R, fill='red', width=self.LINE_WIDTH, dash=((3,3) if self.system_mode==simulation.CNN_Simulator.CREATIVE_MODE else ()))
+                        trajectory2.append(_line)
+                        pre_pos2 = [self.x2_pos, self.y2_pos]
+                        
+                        if len(trajectory2) > TRAJ_MAX:
+                            self.canvas.delete(trajectory2.popleft())
 
 
             # Random Input
@@ -187,12 +190,13 @@ class Event():
             self.dx1, self.dy1 = 0.01, 0.01
 
             # Drawing the Trajectory
-            diff = np.sqrt(sum((np.array(pre_pos1)-np.array([self.x1_pos, self.y1_pos]))**2))
-            if diff >= line_interval:
-                trajectory1.append(self.canvas.create_line(pre_pos1[0]+R, pre_pos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill='blue', width=self.LINE_WIDTH))
-                pre_pos1 = [self.x1_pos, self.y1_pos]
-                if len(trajectory1) > TRAJ_MAX:
-                    self.canvas.delete(trajectory1.popleft())
+            if self.IS_TRAJ:
+                diff = np.sqrt(sum((np.array(pre_pos1)-np.array([self.x1_pos, self.y1_pos]))**2))
+                if diff >= line_interval:
+                    trajectory1.append(self.canvas.create_line(pre_pos1[0]+R, pre_pos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill='blue', width=self.LINE_WIDTH))
+                    pre_pos1 = [self.x1_pos, self.y1_pos]
+                    if len(trajectory1) > TRAJ_MAX:
+                        self.canvas.delete(trajectory1.popleft())
 
     def set_system_mode(self, mode):
         self.system_mode = mode
