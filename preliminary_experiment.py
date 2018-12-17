@@ -17,7 +17,7 @@ class Event():
     # CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
 
     # interactive time[sec]
-    INTERACTIVE_TIME = 10
+    INTERACTIVE_TIME = 5*60
 
     CIRCLE_D = 30
     DIFF = 10
@@ -62,6 +62,7 @@ class Event():
         # self.frame.geometry(str(self.DISP_SIZE)+'x'+str(self.DISP_SIZE))
         self.frame.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.frame.focus_set()
+        self.frame.config(cursor='none')
 
         self.canvas_w = self.frame.winfo_screenwidth() - self.CANVAS_MARGIN*2
         self.canvas_h = self.frame.winfo_screenheight() - self.CANVAS_MARGIN*2
