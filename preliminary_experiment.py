@@ -69,8 +69,8 @@ class Event():
 
         print('w,h', self.canvas_w, self.canvas_h)
 
-        self.init_pos1 = [self.canvas_w/2-self.CIRCLE_D*2, self.canvas_h/2-self.CIRCLE_D*2]
-        self.init_pos2 = [self.canvas_w/2+self.CIRCLE_D*2, self.canvas_h/2+self.CIRCLE_D*2]
+        self.init_pos1 = [self.canvas_w/2-self.CIRCLE_D*2, self.canvas_h/2-self.CIRCLE_D/2]
+        self.init_pos2 = [self.canvas_w/2+self.CIRCLE_D*2, self.canvas_h/2-self.CIRCLE_D/2]
 
         self.canvas = tkinter.Canvas(self.frame, width=self.canvas_w, height=self.canvas_h, background='white')
         self.canvas.place(x=self.CANVAS_MARGIN, y=self.CANVAS_MARGIN)

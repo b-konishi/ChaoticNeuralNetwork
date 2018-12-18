@@ -20,8 +20,20 @@ class Analysis:
                 self.x2.append(d[index.index('x2')])
                 self.y2.append(d[index.index('y2')])
                 # print(np.array(d).astype(np.float32))
-        # print(self.time)
-        print(self.lyapunov(self.time, [np.diff(self.x1), np.diff(self.y1)]))
+
+        self.time = np.array(self.time)
+        print(self.time)
+
+        _time = (self.time*10**-3).astype(np.int)
+        print(_time)
+
+        _time_idx = np.where(np.diff(_time)>0)[0]+1
+        _time_idx = np.insert(_time_idx,0,0)
+        print(_time_idx)
+        
+
+
+        # print(self.lyapunov(self.time, [np.diff(self.x1), np.diff(self.y1)]))
 
     def lyapunov(self, time, data):
         plt.figure()
