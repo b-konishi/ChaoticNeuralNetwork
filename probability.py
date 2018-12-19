@@ -83,7 +83,8 @@ class InfoContent:
 
 
     # TF(x<=y)
-    def np_get_TE(self, x, y):
+    def np_get_TE(self, to_x, from_x):
+        x, y = to_x, from_x
         if any(np.isnan(x)) or any(np.isnan(y)):
             return 0.
     
