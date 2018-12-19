@@ -61,18 +61,33 @@ class Analysis:
         re_plot = my.RecurrencePlot()
 
         fig, (ax1,ax2) = plt.subplots(ncols=2, figsize=(12,6))
-        re_plot.plot(ax1, delayed_out[:300,:], eps=0.5)
+        re_plot.plot(ax1, delayed_out[::2,:], eps=0.5)
 
         
         te_2to1, te_1to2 = [], []
         te_diff = []
-        N = 60
+        te_diff_rand = []
+        N = 20
+
+        r1 = np.random.rand(len(self.shaped_x1))
+        r2 = np.random.rand(len(self.shaped_x1))
         for i in range(N, len(self.shaped_x1)):
             _te_2to1 = ic.np_get_TE(from_x=self.shaped_x2[i-N:i], to_x=self.shaped_x1[i-N:i])
             _te_1to2 = ic.np_get_TE(from_x=self.shaped_x1[i-N:i], to_x=self.shaped_x2[i-N:i])
+
+            _te_2to1_rand = ic.np_get_TE(from_x=r2[i-N:i], to_x=r1[i-N:i])
+            _te_1to2_rand = ic.np_get_TE(from_x=r1[i-N:i], to_x=r2[i-N:i])
+
             te_2to1.append(_te_2to1)
             te_1to2.append(_te_1to2)
             te_diff.append(_te_2to1-_te_1to2)
+
+            te_diff_rand.append(_te_2to1_rand-_te_1to2_rand)
+
+        rate = sum(np.abs(te_diff)>max(abs(max(te_diff)),abs(min(te_diff)))/2)/len(te_diff)
+        rate_rand = sum(np.abs(te_diff_rand)>max(abs(max(te_diff_rand)),abs(min(te_diff_rand)))/2)/len(te_diff_rand)
+        # print('rate={:.1f}[%]\nrandom rate={:.1f}[%]'.format(rate*100, rate_rand*100))
+        print('var={:.3f}\nrandom var={:.3f}'.format(np.var(te_diff), np.var(te_diff_rand)))
 
         '''
         for te1,te2 in zip(np.array_split(self.shaped_x1,N), np.array_split(self.shaped_x2,N)):
@@ -85,9 +100,10 @@ class Analysis:
         '''
 
         # print(te_2to1, te_1to2)
-        ax2.plot(te_2to1, c='r', lw=0.7)
-        ax2.plot(te_1to2, c='b', lw=0.7)
+        # ax2.plot(te_2to1, c='r', lw=0.7)
+        # ax2.plot(te_1to2, c='b', lw=0.7)
         ax2.plot(te_diff, c='black', lw=0.7)
+        ax2.plot(te_diff_rand, c='green', lw=0.7)
 
         # re_plot.plot(ax2, delayed_out[300:,:], eps=0.7)
 
@@ -100,11 +116,11 @@ class Analysis:
         shaped_data = []
 
         _time = (time/500).astype(np.int)
-        print('_time: ', _time)
+        # print('_time: ', _time)
 
         _time_idx = np.where(np.diff(_time)>0)[0]+1
         _time_idx = np.insert(_time_idx,0,0)
-        print('_time_idx: ', _time_idx)
+        # print('_time_idx: ', _time_idx)
 
         for i in range(len(_time_idx)-1):
             shaped_data.append(data[_time_idx[i+1]]-data[_time_idx[i]])
@@ -144,14 +160,14 @@ class Analysis:
             warnings.simplefilter('ignore')
 
             # Normalize [-0.5, 0.5]
-            norm = (seqs-np.min(seqs,axis=0))/(np.max(seqs,axis=0)-np.min(seqs,axis=0))
+            norm = (seqs-np.min(seqs,axis=0))/(np.max(seqs,axis=0)-np.min(seqs,axis=0))-0.5
 
         return np.where(np.isnan(norm), 0.0, norm)
 
 
 
 if __name__ == '__main__':
-    a = Analysis('../log_teranishi_murata.txt.bk')
+    a = Analysis('../preliminary_data/log_maeda_araki.txt')
 
 
 

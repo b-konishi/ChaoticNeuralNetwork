@@ -94,8 +94,8 @@ class InfoContent:
         N = min(len(x), len(y)) - 1
         Nx = int(np.log2(N) + 1)
         Ny = Nx
-        print('N: ', N)
-        print('bin: ', Nx)
+        # print('N: ', N)
+        # print('bin: ', Nx)
 
         p, px, pxx, pxy = dict(), dict(), dict(), dict()
 
