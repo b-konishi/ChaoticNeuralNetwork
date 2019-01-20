@@ -5,6 +5,10 @@ import numpy as np
 import simulation
 from collections import deque
 
+import csv
+import datetime
+import os
+from shutil import copyfile
 
 class Event():
     USER_MODE = 'USER'
@@ -14,18 +18,20 @@ class Event():
 
     DISP_SIZE = 1000
     CANVAS_MARGIN = 10
-    CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
+    # CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
 
     CIRCLE_D = 30
     LINE_WIDTH = 2
 
+    INTERACTIVE_TIME = 10
+
     # 1:USER, 2:SYSTEM
-    INIT_POS1 = DISP_SIZE/2 - CIRCLE_D*2
-    INIT_POS2 = DISP_SIZE/2 + CIRCLE_D*2
+    # INIT_POS1 = DISP_SIZE/2 - CIRCLE_D*2
+    # INIT_POS2 = DISP_SIZE/2 + CIRCLE_D*2
 
 
     # Experimental numeric value...
-    ARROW_KEYCODE = {'Up':111, 'Down':116, 'Right':114, 'Left':113}
+    ARROW_KEYCODE = {'Enter':36, 'Up':111, 'Down':116, 'Right':114, 'Left':113}
 
     def __init__(self, mode=USER_MODE):
         self.mode = mode
@@ -33,12 +39,10 @@ class Event():
 
         self.frame, self.canvas = [None]*2
 
-        self.x1_pos, self.y1_pos = [self.INIT_POS1]*2
-        self.dx1, self.dy1 = 0.01, 0.01
-        self.preget_pos1 = [self.INIT_POS1]*2
+        self.canvas_w, self.canvas_h = [None]*2
+        self.init_pos1 = [None]*2
+        self.init_pos2 = [None]*2
 
-        self.x2_pos, self.y2_pos = [self.INIT_POS2]*2
-        self.dx2, self.dy2 = [0]*2
         self.is_output = False
 
         self.is_drawing = True
@@ -47,6 +51,10 @@ class Event():
         self.history = []
 
         self.TORUS = [False]*2
+        self.FLIP = [False]*2
+
+        self.logfile = '../log.txt'
+        self.testee = 'a'
 
         animation_thread = threading.Thread(target=self.animation)
         animation_thread.start()
@@ -54,15 +62,44 @@ class Event():
     def get_mode(self):
         return self.mode
 
+    def get_init_pos(self):
+        print(self.init_pos1)
+        return (self.init_pos1, self.init_pos2)
+
 
     def animation(self):
         self.frame = tkinter.Tk()
+        # self.frame.attributes('-fullscreen', True)
         self.frame.title("Title")
-        self.frame.geometry(str(self.DISP_SIZE)+'x'+str(self.DISP_SIZE))
         self.frame.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.frame.focus_set()
+        self.frame.config(cursor='none')
 
-        self.canvas = tkinter.Canvas(self.frame, width=self.CANVAS_SIZE, height=self.CANVAS_SIZE, background='white')
+        self.canvas_w = self.frame.winfo_screenwidth() - self.CANVAS_MARGIN*2
+        self.canvas_h = self.frame.winfo_screenheight() - self.CANVAS_MARGIN*2
+
+        ################ DELETE ###################
+        self.canvas_w = 500
+        self.canvas_h = 500
+        self.frame.geometry(str(500+self.CANVAS_MARGIN*2)+'x'+str(500+self.CANVAS_MARGIN*2))
+        ###########################################
+
+        print('w,h', self.canvas_w, self.canvas_h)
+
+        # 1:USER, 2:SYSTEM
+        self.init_pos1 = [self.canvas_w/2-self.CIRCLE_D*2, self.canvas_h/2-self.CIRCLE_D/2]
+        self.init_pos2 = [self.canvas_w/2+self.CIRCLE_D*2, self.canvas_h/2-self.CIRCLE_D/2]
+
+        # Initialize position
+        self.x1_pos, self.y1_pos = self.init_pos1
+        self.dx1, self.dy1 = 0.01, 0.01
+        self.preget_pos1 = self.init_pos1
+
+        self.x2_pos, self.y2_pos = self.init_pos2
+        self.dx2, self.dy2 = [0]*2
+
+        # self.canvas = tkinter.Canvas(self.frame, width=self.CANVAS_SIZE, height=self.CANVAS_SIZE, background='white')
+        self.canvas = tkinter.Canvas(self.frame, width=self.canvas_w, height=self.canvas_h, background='white')
         # self.canvas.pack()
         self.canvas.place(x=self.CANVAS_MARGIN, y=self.CANVAS_MARGIN)
 
@@ -70,8 +107,31 @@ class Event():
         self.frame.bind("<KeyRelease>", self.keyrelease)
         self.frame.bind("<FocusOut>", self.focusout)
 
-        circle1 = self.canvas.create_oval(self.INIT_POS1, self.INIT_POS1, self.INIT_POS1+self.CIRCLE_D, self.INIT_POS1+self.CIRCLE_D, fill='blue', width=0)
-        circle2 = self.canvas.create_oval(self.INIT_POS2, self.INIT_POS2, self.INIT_POS2+self.CIRCLE_D, self.INIT_POS2+self.CIRCLE_D, fill='red', width=0)
+        # circle1 = self.canvas.create_oval(self.init_pos1, self.init_pos1, self.init_pos1+self.CIRCLE_D, self.init_pos1+self.CIRCLE_D, fill='blue', width=0)
+        # circle2 = self.canvas.create_oval(self.init_pos2, self.init_pos2, self.init_pos2+self.CIRCLE_D, self.init_pos2+self.CIRCLE_D, fill='red', width=0)
+
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='red', width=0, tags='t_circle1')
+        self.canvas.tag_bind('t_circle1')
+        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='blue', width=0, tags='t_circle2')
+        self.canvas.tag_bind('t_circle2')
+
+
+        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
+        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='2', font=('FixedSys',36), tags='text')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
+        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='1', font=('FixedSys',36), tags='text')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
+        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='START', font=('FixedSys',36), tags='text')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
 
         update_thread = threading.Thread(target=self.update, args=[(circle1, circle2)])
         # When this window is shutdowned, this thread is also finished.
@@ -84,13 +144,30 @@ class Event():
     # Always Monitoring
     def update(self, obj):
         obj1, obj2 = obj
-        pre_pos1, pre_pos2 = [self.INIT_POS1]*2, [self.INIT_POS2]*2
+        pre_pos1, pre_pos2 = [self.init_pos1]*2, [self.init_pos2]*2
         R = self.CIRCLE_D/2
 
         TRAJ_MAX = 50
         trajectory1, trajectory2 = deque([]), deque([])
+
+        f = open(self.logfile, mode='w')
+        writer = csv.writer(f, lineterminator='\n')
+        writer.writerow(['testee1','W','H','CIRCLE_D'])
+        writer.writerow([self.testee,self.canvas_w,self.canvas_h,self.CIRCLE_D])
+        writer.writerow(['time[ms]','x1','y1','x2','y2'])
+        start_time = datetime.datetime.now()
+
+        _t = 0
         while True:
             line_interval = self.DISP_SIZE/20
+
+            # Time
+            t = self.INTERACTIVE_TIME - int((datetime.datetime.now()-start_time).total_seconds())
+            if t != _t:
+                self.canvas.delete('time')
+                self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time')
+                self.frame.update()
+                _t = t
             
             # System-Output
             if self.is_output:
@@ -100,25 +177,48 @@ class Event():
                 self.x2_pos += dx2_
                 self.y2_pos += dy2_
 
+
                 if self.x2_pos < 0:
-                    dx2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.x2_pos-dx2_)
-                    self.x2_pos = self.CANVAS_SIZE-self.CIRCLE_D
+                    # dx2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.x2_pos-dx2_)
+                    # self.x2_pos = self.CANVAS_SIZE-self.CIRCLE_D
+                    # dx2_ = self.x2_pos-self.dx2
+                    # self.x2_pos = 0
                     pre_pos2[0] = self.x2_pos
-                elif self.x2_pos > self.CANVAS_SIZE-self.CIRCLE_D:
-                    dx2_ = 0 - (self.x2_pos-dx2_)
-                    self.x2_pos = 0
+                    self.FLIP[0] = not self.FLIP[0]
+                elif self.x2_pos > self.canvas_w-self.CIRCLE_D:
+                    # dx2_ = 0 - (self.x2_pos-dx2_)
+                    # self.x2_pos = 0
+                    # dx2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.x2_pos-dx2_)
+                    # self.x2_pos = self.CANVAS_SIZE-self.CIRCLE_D
                     pre_pos2[0] = self.x2_pos
+                    self.FLIP[0] = not self.FLIP[0]
 
                 if self.y2_pos < 0:
-                    dy2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.y2_pos-dy2_)
-                    self.y2_pos = self.CANVAS_SIZE-self.CIRCLE_D
+                    # dy2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.y2_pos-dy2_)
+                    # self.y2_pos = self.CANVAS_SIZE-self.CIRCLE_D
                     pre_pos2[1] = self.y2_pos
-                elif self.y2_pos > self.CANVAS_SIZE-self.CIRCLE_D:
-                    dy2_ = 0 - (self.y2_pos-dy2_)
-                    self.y2_pos = 0
+                    self.FLIP[1] = not self.FLIP[1]
+                elif self.y2_pos > self.canvas_h-self.CIRCLE_D:
+                    print('posy2: ', self.y2_pos)
+                    # dy2_ = 0 - (self.y2_pos-dy2_)
+                    # self.y2_pos = 0
                     pre_pos2[1] = self.y2_pos
+                    self.FLIP[1] = not self.FLIP[1]
+
+                if self.FLIP[0]:
+                    self.x2_pos -= dx2_*2
+                    dx2_ = -dx2_
+
+                if self.FLIP[1]:
+                    self.y2_pos -= dy2_*2
+                    dy2_ = -dy2_
 
                 self.canvas.move(obj2, dx2_, dy2_)
+                print('posx2: ', self.x2_pos)
+                # print('posy2: ', self.y2_pos)
+                print('FLIP: ', self.FLIP)
+                # print('posy2: ', self.y2_pos)
+
 
                 # Drawing the Trajectory
                 if self.IS_TRAJ:
@@ -147,48 +247,65 @@ class Event():
             # User Input with Arrow-Key
             for key in self.history:
                 dx_, dy_ = self.dx1, self.dy1
+                # print('pos1: ', self.y1_pos)
                 if key == self.ARROW_KEYCODE['Up']:
                     self.y1_pos -= self.dy1
-                    if self.y1_pos <= 0:
-                        dy_ = -(self.CANVAS_SIZE-self.CIRCLE_D - self.y1_pos)
-                        self.y1_pos = self.CANVAS_SIZE-self.CIRCLE_D
+                    if self.y1_pos < 0:
+                        # dy_ = -(self.CANVAS_SIZE-self.CIRCLE_D - self.y1_pos)
+                        # self.y1_pos = self.CANVAS_SIZE-self.CIRCLE_D
+                        dy_ = self.y1_pos+self.dy1
+                        self.y1_pos = 0
                         pre_pos1[1] = self.y1_pos
-                        self.TORUS[1] = True
+                        # self.TORUS[1] = True
 
                     self.canvas.move(obj1, 0, -dy_)
 
                 elif key == self.ARROW_KEYCODE['Down']:
                     self.y1_pos += self.dy1
-                    if self.y1_pos >= self.CANVAS_SIZE-self.CIRCLE_D:
-                        dy_ = 0 - self.y1_pos
-                        self.y1_pos = 0
+                    if self.y1_pos > self.canvas_h-self.CIRCLE_D:
+                        # dy_ = 0 - self.y1_pos
+                        # self.y1_pos = 0
+                        dy_ = self.canvas_h-self.CIRCLE_D - (self.y1_pos-self.dy1)
+                        self.y1_pos = self.canvas_h-self.CIRCLE_D
                         pre_pos1[1] = self.y1_pos
-                        self.TORUS[1] = True
+                        # self.TORUS[1] = True
 
                     self.canvas.move(obj1, 0, dy_)
 
                 elif key == self.ARROW_KEYCODE['Left']:
                     self.x1_pos -= self.dx1
                     if self.x1_pos <= 0:
-                        dx_ = -(self.CANVAS_SIZE-self.CIRCLE_D - self.x1_pos)
-                        self.x1_pos = self.CANVAS_SIZE-self.CIRCLE_D
+                        # dx_ = -(self.CANVAS_SIZE-self.CIRCLE_D - self.x1_pos)
+                        # self.x1_pos = self.CANVAS_SIZE-self.CIRCLE_D
+                        dx_ = self.x1_pos+self.dx1
+                        self.x1_pos = 0
                         pre_pos1[0] = self.x1_pos
-                        self.TORUS[0] = True
+                        # self.TORUS[0] = True
 
                     self.canvas.move(obj1, -dx_, 0)
 
                 elif key == self.ARROW_KEYCODE['Right']:
                     self.x1_pos += self.dx1
-                    if self.x1_pos >= self.CANVAS_SIZE-self.CIRCLE_D:
-                        dx_ = 0 - self.x1_pos
-                        self.x1_pos = 0
+                    if self.x1_pos >= self.canvas_w-self.CIRCLE_D:
+                        # dx_ = 0 - self.x1_pos
+                        # self.x1_pos = 0
+                        dx_ = self.canvas_w-self.CIRCLE_D - (self.x1_pos-self.dx1)
+                        self.x1_pos = self.canvas_w-self.CIRCLE_D
                         pre_pos1[0] = self.x1_pos
-                        self.TORUS[0] = True
+                        # self.TORUS[0] = True
 
                     self.canvas.move(obj1, dx_, 0)
 
             self.dx1, self.dy1 = 0.01, 0.01
 
+            t = int((datetime.datetime.now()-start_time).total_seconds()*1000)
+            writer.writerow([t, self.x1_pos, self.y1_pos, self.x2_pos, self.y2_pos])
+            # self.canvas.delete('t_circle')
+            if t/1000 > self.INTERACTIVE_TIME:
+                break
+
+
+            '''
             # Drawing the Trajectory
             if self.IS_TRAJ:
                 diff = np.sqrt(sum((np.array(pre_pos1)-np.array([self.x1_pos, self.y1_pos]))**2))
@@ -197,6 +314,13 @@ class Event():
                     pre_pos1 = [self.x1_pos, self.y1_pos]
                     if len(trajectory1) > TRAJ_MAX:
                         self.canvas.delete(trajectory1.popleft())
+            '''
+
+        f.close()
+        print('Output a logfile: ' + self.logfile)
+        # Backup a logfile
+        copyfile(self.logfile, self.logfile+'.bk')
+        print('Copy the logfile: ' + self.logfile+'.bk')
 
     def set_system_mode(self, mode):
         self.system_mode = mode
@@ -205,10 +329,11 @@ class Event():
         pos = [self.x1_pos, self.y1_pos]
         _pre_pos, _pos = np.array(self.preget_pos1), np.array(pos)
 
-        diff = np.where(self.TORUS,
-                np.sign(-(_pos-_pre_pos))*(self.CANVAS_SIZE-abs(_pos-_pre_pos)),
-                _pos-_pre_pos
-                )
+        # diff = np.where(self.TORUS,
+        #         np.sign(-(_pos-_pre_pos))*(self.CANVAS_SIZE-abs(_pos-_pre_pos)),
+        #         _pos-_pre_pos
+        #         )
+        diff = _pos-_pre_pos
 
         self.TORUS = [False, False]
         diff = [diff[0], -diff[1]]

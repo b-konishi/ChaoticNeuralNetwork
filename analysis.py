@@ -29,64 +29,78 @@ class Analysis:
 
         self.shaped_x1 = self.make_cluster(self.time, self.x1)
         self.shaped_x2 = self.make_cluster(self.time, self.x2)
+        self.shaped_y1 = self.make_cluster(self.time, self.y1)
+        self.shaped_y2 = self.make_cluster(self.time, self.y2)
 
         self.shaped_x1 = self.normalize(self.shaped_x1)
         self.shaped_x2 = self.normalize(self.shaped_x2)
+        self.shaped_y1 = self.normalize(self.shaped_y1)
+        self.shaped_y2 = self.normalize(self.shaped_y2)
+
+        self.shaped_d1, self.shaped_d2 = [],[] 
+        for ((x1,y1),(x2,y2)) in zip(zip(self.shaped_x1,self.shaped_y1), zip(self.shaped_x2,self.shaped_y2)):
+            self.shaped_d1.append(np.linalg.norm([x1,y1],2))
+            self.shaped_d2.append(np.linalg.norm([x2,y2],2))
 
         print('shaped: ', len(self.shaped_x1))
 
         ic = probability.InfoContent()
-        delayed_tau, mic = ic.get_tau(self.shaped_x1, max_tau=20)
-        print('tau: ', delayed_tau)
+        delayed_tau1, mic1 = ic.get_tau(self.shaped_d1, max_tau=20)
+        delayed_tau2, mic2 = ic.get_tau(self.shaped_d2, max_tau=20)
+        print('tau1: ', delayed_tau1)
+        print('tau2: ', delayed_tau2)
 
         fig, (ax_mic, ax_delay, ax_traj) = plt.subplots(ncols=3, figsize=(18,6))
-        ax_mic.plot(range(1,len(mic)+1), mic, c='black')
-        ax_mic.set_title('Mutual Information Content(tau:{})'.format(delayed_tau))
+        ax_mic.plot(range(1,len(mic1)+1), mic1, c='black')
+        ax_mic.set_title('Mutual Information Content(tau:{})'.format(delayed_tau1))
         ax_mic.set_xticks(np.arange(0, 20+1, 1))
         ax_mic.grid()
 
         delayed_dim = 3
-        delayed_out = []
+        delayed_out1, delayed_out2 = [], []
         for i in reversed(range(delayed_dim)):
-            delayed_out.append(np.roll(self.shaped_x1, -i*delayed_tau)[:len(self.shaped_x1)-delayed_tau])
+            delayed_out1.append(np.roll(self.shaped_y1, -i*delayed_tau1)[:len(self.shaped_y1)-delayed_tau1])
+            delayed_out2.append(np.roll(self.shaped_y2, -i*delayed_tau2)[:len(self.shaped_y2)-delayed_tau2])
 
-        delayed_out = np.array(delayed_out).T
+        delayed_out1 = np.array(delayed_out1).T
+        delayed_out2 = np.array(delayed_out2).T
         # ax_delay = Axes3D(fig)
         ax_delay.set_title('delayed-out')
-        ax_delay.plot(delayed_out[:,0], delayed_out[:,1], '.-', lw=0.1)
+        ax_delay.plot(delayed_out1[:,0], delayed_out1[:,1], '.-', lw=0.1)
 
         ax_traj.plot(self.x1[::100], self.y1[::100], '.-', lw=0.1)
             
 
-        re_plot = my.RecurrencePlot()
+        rp_plot = my.RecurrencePlot()
 
-        fig, (ax1,ax2) = plt.subplots(ncols=2, figsize=(12,6))
-        re_plot.plot(ax1, delayed_out[::2,:], eps=0.5)
+        fig, (ax_rp1,ax_rp2) = plt.subplots(ncols=2, figsize=(24,12))
+        rp_plot.plot(ax_rp1, delayed_out1[::2,:], eps=0.5)
+        rp_plot.plot(ax_rp2, delayed_out2[::2,:], eps=0.5)
 
         
         te_2to1, te_1to2 = [], []
         te_diff = []
         te_diff_rand = []
-        N = 20
+        N = 60
 
         r1 = np.random.rand(len(self.shaped_x1))
         r2 = np.random.rand(len(self.shaped_x1))
         for i in range(N, len(self.shaped_x1)):
-            _te_2to1 = ic.np_get_TE(from_x=self.shaped_x2[i-N:i], to_x=self.shaped_x1[i-N:i])
-            _te_1to2 = ic.np_get_TE(from_x=self.shaped_x1[i-N:i], to_x=self.shaped_x2[i-N:i])
-
-            _te_2to1_rand = ic.np_get_TE(from_x=r2[i-N:i], to_x=r1[i-N:i])
-            _te_1to2_rand = ic.np_get_TE(from_x=r1[i-N:i], to_x=r2[i-N:i])
+            _te_2to1 = ic.np_get_TE(from_x=self.shaped_d2[i-N:i], to_x=self.shaped_d1[i-N:i])
+            _te_1to2 = ic.np_get_TE(from_x=self.shaped_d1[i-N:i], to_x=self.shaped_d2[i-N:i])
 
             te_2to1.append(_te_2to1)
             te_1to2.append(_te_1to2)
-            te_diff.append(_te_2to1-_te_1to2)
+            te_diff.append(np.sign(_te_2to1-_te_1to2))
 
+            _te_2to1_rand = ic.np_get_TE(from_x=r2[i-N:i], to_x=r1[i-N:i])
+            _te_1to2_rand = ic.np_get_TE(from_x=r1[i-N:i], to_x=r2[i-N:i])
             te_diff_rand.append(_te_2to1_rand-_te_1to2_rand)
+
 
         rate = sum(np.abs(te_diff)>max(abs(max(te_diff)),abs(min(te_diff)))/2)/len(te_diff)
         rate_rand = sum(np.abs(te_diff_rand)>max(abs(max(te_diff_rand)),abs(min(te_diff_rand)))/2)/len(te_diff_rand)
-        # print('rate={:.1f}[%]\nrandom rate={:.1f}[%]'.format(rate*100, rate_rand*100))
+        print('rate={:.1f}[%]\nrandom rate={:.1f}[%]'.format(rate*100, rate_rand*100))
         print('var={:.3f}\nrandom var={:.3f}'.format(np.var(te_diff), np.var(te_diff_rand)))
 
         '''
@@ -99,13 +113,14 @@ class Analysis:
             te_diff.append(_te_2to1-_te_1to2)
         '''
 
+        fig3, (ax_te, ax_te_diff) = plt.subplots(ncols=2, figsize=(12,6))
         # print(te_2to1, te_1to2)
-        # ax2.plot(te_2to1, c='r', lw=0.7)
-        # ax2.plot(te_1to2, c='b', lw=0.7)
-        ax2.plot(te_diff, c='black', lw=0.7)
-        ax2.plot(te_diff_rand, c='green', lw=0.7)
+        ax_te.plot(te_2to1, c='r', lw=0.5)
+        ax_te.plot(te_1to2, c='b', lw=0.5)
+        ax_te_diff.plot(te_diff, c='black', lw=0.7)
+        ax_te_diff.grid()
+        # ax2.plot(te_diff_rand, c='b', lw=0.7)
 
-        # re_plot.plot(ax2, delayed_out[300:,:], eps=0.7)
 
         plt.show()
         
@@ -167,7 +182,7 @@ class Analysis:
 
 
 if __name__ == '__main__':
-    a = Analysis('../preliminary_data/log_maeda_araki.txt')
+    a = Analysis('../preliminary_data/log_hamada_oka.txt')
 
 
 
