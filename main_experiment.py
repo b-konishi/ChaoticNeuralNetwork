@@ -36,6 +36,8 @@ class CNN_Simulator:
     LOG_PATH = '../logdir'
     SOUND_PATH = '../music/'
 
+    act_logfile = '../log_act.txt'
+
     RANDOM_BEHAVIOR = 'RANDOM'
     CHAOTIC_BEHAVIOR = 'CHAOS'
 
@@ -66,11 +68,11 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 30
+        self.seq_len = 10
         self.epoch_size = 100
 
         self.input_units = 2
-        self.inner_units = 20
+        self.inner_units = 10
         self.output_units = 2
 
         # The number of inner-layers
@@ -336,9 +338,16 @@ class CNN_Simulator:
         is_drawing = True
         is_changemode = True
         _premodeA = modeA
-        mode_switch = [self.epoch_size]
+        mode_switch = []
         outA_all, outB_all = [], []
-        for epoch in range(self.epoch_size):
+        epoch = 0
+        
+        f = open(self.act_logfile, mode='w')
+
+        while not event.get_startup_signal():
+            pass
+        # for epoch in range(self.epoch_size):
+        while not event.get_systemstop_signal():
             print('epoch:{}, mode:{}'.format(epoch, modeA))
 
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
@@ -363,11 +372,20 @@ class CNN_Simulator:
                 diff, is_drawing = event.get_pos()
                 outB.append(diff)
 
+                _var = sum(np.var(outB,0))
+
                 time.sleep(0.1)
+
+            print('outB: ', np.array(outB)[:,0])
+            
+            print('var', sum(np.var(outB,0)))
+            if sum(np.var(outB,0)) < 100:
+                print('INPUT=RANDOM')
+                outB = np.random.rand(self.seq_len, 2)
+
 
             if not is_drawing:
                 break
-
 
             outB = np.array(outB)/mag
 
@@ -381,10 +399,12 @@ class CNN_Simulator:
             # Mesuring the amount of activity
             d1 = np.mean(abs(np.diff(outB[:,0])))
             d2 = np.mean(abs(np.diff(outB[:,1])))
-            print(np.mean([d1,d2]))
+            self.activity = np.mean([d1,d2])
+            print(self.activity)
+            f.write(str(self.activity)+'\n')
 
-            if is_changemode and np.mean([d1,d2]) < 0.07:
-                print('[Change Mode]', np.mean([d1,d2]))
+            if is_changemode and self.activity < 0.07:
+                print('[Change Mode]', self.activity)
                 modeA = not modeA
                 mode_switch.append(epoch)
                 event.set_system_mode(modeA)
@@ -407,9 +427,12 @@ class CNN_Simulator:
             # print('[A] value={}'.format(outA))
             # print('[B] value={}'.format(outB))
 
-        # print('outA: ', np.array(trajectoryA))
-        print('outB: ', np.array(trajectoryB))
+            epoch += 1
 
+        # print('outA: ', np.array(trajectoryA))
+        # print('outB: ', np.array(trajectoryB))
+
+        f.close()
         mode_switch = np.unique(mode_switch) * self.seq_len
         print('mode_switch: ', mode_switch)
 
