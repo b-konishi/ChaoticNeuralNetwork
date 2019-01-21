@@ -293,7 +293,7 @@ class CNN_Simulator:
 
 
     def human_agent_interaction(self):
-        sessA = tf.InteractiveSession()
+        sess = tf.InteractiveSession()
 
         with tf.name_scope('Mode'):
             Mode = tf.placeholder(dtype = tf.bool, name='Mode')
@@ -309,13 +309,13 @@ class CNN_Simulator:
         merged = tf.summary.merge_all()
 
         # Tensorboard logfile
-        self.LOG_PATHA = '../Alogdir'
+        self.LOG_PATHA = '../logdir'
 
         if tf.gfile.Exists(self.LOG_PATHA):
             tf.gfile.DeleteRecursively(self.LOG_PATHA)
-        writerA = tf.summary.FileWriter(self.LOG_PATHA, sessA.graph)
+        writerA = tf.summary.FileWriter(self.LOG_PATHA, sess.graph)
 
-        sessA.run(tf.global_variables_initializer())
+        sess.run(tf.global_variables_initializer())
 
         # fig, ax = plt.subplots(1, 1)
         # fig = plt.figure(figsize=(10,6))
@@ -343,13 +343,13 @@ class CNN_Simulator:
 
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
-                outA, gradientsA = sessA.run([outputs, grad], feed_dict=feed_dictA)
+                outA, gradientsA = sess.run([outputs, grad], feed_dict=feed_dictA)
 
                 if epoch % 1 == 0:
                     for (g, v) in gradientsA:
                         print('gradA: ', g[0][0:5])
 
-                summaryA, _ = sessA.run([merged, train_step], feed_dictA)
+                summaryA, _ = sess.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:

@@ -116,6 +116,14 @@ class Event():
         self.canvas.tag_bind('t_circle2')
 
 
+        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='5', font=('FixedSys',36), tags='text')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
+        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='4', font=('FixedSys',36), tags='text')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
         self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text')
         self.frame.update()
         time.sleep(1)
@@ -166,7 +174,6 @@ class Event():
             if t != _t:
                 self.canvas.delete('time')
                 self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time')
-                self.frame.update()
                 _t = t
             
             # System-Output
@@ -321,6 +328,11 @@ class Event():
         # Backup a logfile
         copyfile(self.logfile, self.logfile+'.bk')
         print('Copy the logfile: ' + self.logfile+'.bk')
+
+        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='FINISH', font=('FixedSys',36), tags='text')
+        self.canvas.delete('time')
+        while not self.ARROW_KEYCODE['Enter'] in self.history:
+            self.frame.update()
 
     def set_system_mode(self, mode):
         self.system_mode = mode
