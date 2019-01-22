@@ -384,7 +384,25 @@ class CNN_Simulator:
             # ADJUST
             if sum(np.var(outB,0)) < 20:
                 print('INPUT=RANDOM')
-                outB = np.random.rand(self.seq_len, 2)
+                outB = []
+                for i in range(int(np.ceil(self.seq_len/3))):
+                    r = np.random.rand(1,2).tolist()
+                    if i == np.ceil(self.seq_len/3)-1:
+                        outB.extend(r*(self.seq_len%3))
+                    else:
+                        outB.extend(r*3)
+                outB = np.array(outB)
+                print('BBB: ',outB)
+
+
+                '''
+                r = np.random.rand(int((self.seq_len/3)), 2)
+                outB = np.zeros([self.seq_len,2])
+                outB[0:self.seq_len:3] = r
+                outB[1:self.seq_len:3] = r
+                outB[2:self.seq_len:3] = r
+                # outB = np.random.rand(self.seq_len, 2)
+                '''
 
 
             if not is_drawing:
