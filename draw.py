@@ -17,15 +17,15 @@ class Event():
     IS_TRAJ = False
 
     DISP_SIZE = 1000
-    CANVAS_MARGIN = 10
+    CANVAS_MARGIN = 0
     # CANVAS_SIZE = DISP_SIZE - CANVAS_MARGIN*2
 
     CIRCLE_D = 30
     LINE_WIDTH = 2
 
-    INTERACTIVE_TIME = 5*60
+    INTERACTIVE_TIME = 2*60
 
-    DIFF = 0.05
+    DIFF = 0.04
 
     # 1:USER, 2:SYSTEM
     # INIT_POS1 = DISP_SIZE/2 - CIRCLE_D*2
@@ -92,8 +92,8 @@ class Event():
         print('w,h', self.canvas_w, self.canvas_h)
 
         # 1:USER, 2:SYSTEM
-        self.init_pos1 = [self.canvas_w/2-self.CIRCLE_D*2, self.canvas_h/2-self.CIRCLE_D/2]
-        self.init_pos2 = [self.canvas_w/2+self.CIRCLE_D*2, self.canvas_h/2-self.CIRCLE_D/2]
+        self.init_pos1 = [self.canvas_w/2-self.CIRCLE_D/2-self.CIRCLE_D*3, self.canvas_h/2-self.CIRCLE_D/2]
+        self.init_pos2 = [self.canvas_w/2-self.CIRCLE_D/2+self.CIRCLE_D*3, self.canvas_h/2-self.CIRCLE_D/2]
 
         # Initialize position
         self.x1_pos, self.y1_pos = self.init_pos1
@@ -104,7 +104,7 @@ class Event():
         self.dx2, self.dy2 = [0]*2
 
         # self.canvas = tkinter.Canvas(self.frame, width=self.CANVAS_SIZE, height=self.CANVAS_SIZE, background='white')
-        self.canvas = tkinter.Canvas(self.frame, width=self.canvas_w, height=self.canvas_h, background='white')
+        self.canvas = tkinter.Canvas(self.frame, width=self.canvas_w, height=self.canvas_h, background='black')
         # self.canvas.pack()
         self.canvas.place(x=self.CANVAS_MARGIN, y=self.CANVAS_MARGIN)
 
@@ -115,9 +115,9 @@ class Event():
         # circle1 = self.canvas.create_oval(self.init_pos1, self.init_pos1, self.init_pos1+self.CIRCLE_D, self.init_pos1+self.CIRCLE_D, fill='blue', width=0)
         # circle2 = self.canvas.create_oval(self.init_pos2, self.init_pos2, self.init_pos2+self.CIRCLE_D, self.init_pos2+self.CIRCLE_D, fill='red', width=0)
 
-        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='red', width=0, tags='t_circle1')
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
         self.canvas.tag_bind('t_circle1')
-        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='blue', width=0, tags='t_circle2')
+        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
         self.canvas.tag_bind('t_circle2')
 
         self.frame.update()
@@ -160,24 +160,24 @@ class Event():
         self.canvas.delete('t_circle1')
         self.canvas.delete('t_circle2')
         self.init_position()
-        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='red', width=0, tags='t_circle1')
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
         self.canvas.tag_bind('t_circle1')
-        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='blue', width=0, tags='t_circle2')
+        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
         self.canvas.tag_bind('t_circle2')
 
-        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text')
+        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text', fill='white')
         self.frame.update()
         time.sleep(1)
         self.canvas.delete('text')
-        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='2', font=('FixedSys',36), tags='text')
+        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='2', font=('FixedSys',36), tags='text', fill='white')
         self.frame.update()
         time.sleep(1)
         self.canvas.delete('text')
-        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='1', font=('FixedSys',36), tags='text')
+        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='1', font=('FixedSys',36), tags='text', fill='white')
         self.frame.update()
         time.sleep(1)
         self.canvas.delete('text')
-        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='START', font=('FixedSys',36), tags='text')
+        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='START', font=('FixedSys',36), tags='text', fill='white')
         self.frame.update()
         time.sleep(1)
         self.canvas.delete('text')
@@ -216,7 +216,7 @@ class Event():
             t = self.INTERACTIVE_TIME - int((datetime.datetime.now()-start_time).total_seconds())
             if t != _t:
                 self.canvas.delete('time')
-                self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time')
+                self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}:{mode:}'.format(minutes=int(t/60), seconds=t%60, mode='IMITATE' if self.system_mode else 'CHAOTIC'), font=('FixedSys',24), tags='time', fill='white')
                 _t = t
                 self.frame.update()
             

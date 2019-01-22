@@ -68,7 +68,7 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 10
+        self.seq_len = 20
         self.epoch_size = 100
 
         self.input_units = 2
@@ -327,8 +327,9 @@ class CNN_Simulator:
         re_plot = my.RecurrencePlot()
 
         # True: Following, False: Creative
-        # modeA = self.CREATIVE_MODE
         modeA = self.IMITATION_MODE
+        modeA = self.CREATIVE_MODE
+        event.set_system_mode(modeA)
 
         trajectoryA = []
         trajectoryB = []
@@ -365,7 +366,7 @@ class CNN_Simulator:
                 outA = np.random.rand(self.seq_len, self.output_units)-0.5
 
             outB = []
-            mag = 100
+            mag = 20
             for i in range(self.seq_len):
                 event.set_movement(np.array(outA[i]), mag)
 
@@ -374,12 +375,14 @@ class CNN_Simulator:
 
                 _var = sum(np.var(outB,0))
 
-                time.sleep(0.1)
+                # ADJUST
+                time.sleep(0.05)
 
             print('outB: ', np.array(outB)[:,0])
             
             print('var', sum(np.var(outB,0)))
-            if sum(np.var(outB,0)) < 100:
+            # ADJUST
+            if sum(np.var(outB,0)) < 20:
                 print('INPUT=RANDOM')
                 outB = np.random.rand(self.seq_len, 2)
 
@@ -403,7 +406,7 @@ class CNN_Simulator:
             print(self.activity)
             f.write(str(self.activity)+'\n')
 
-            if is_changemode and self.activity < 0.07:
+            if is_changemode and self.activity < 0.10:
                 print('[Change Mode]', self.activity)
                 modeA = not modeA
                 mode_switch.append(epoch)
