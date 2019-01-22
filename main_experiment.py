@@ -12,6 +12,7 @@ import time
 import numpy as np
 import threading
 import warnings
+import datetime
 
 # Tensorflow
 import tensorflow as tf
@@ -68,7 +69,7 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 20
+        self.seq_len = 25
         self.epoch_size = 100
 
         self.input_units = 2
@@ -293,6 +294,13 @@ class CNN_Simulator:
 
         return lyapunov
 
+    def network_bg(self, event, proctime, num):
+        for i in range(num):
+            time.sleep(proctime/num)
+            event.set_network_interval()
+            
+
+
 
     def human_agent_interaction(self):
         sess = tf.InteractiveSession()
@@ -342,6 +350,7 @@ class CNN_Simulator:
         mode_switch = []
         outA_all, outB_all = [], []
         epoch = 0
+        proctime = 1
         
         f = open(self.act_logfile, mode='w')
 
@@ -354,6 +363,12 @@ class CNN_Simulator:
         while not event.get_systemstop_signal():
             print('epoch:{}, mode:{}'.format(epoch, modeA))
 
+            network_proctime_st = datetime.datetime.now()
+
+            # event.set_network_interval(proctime, 3)
+            networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
+            networkbg_thread.daemon = True
+            networkbg_thread.start()
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
                 outA, gradientsA = sess.run([outputs, grad], feed_dict=feed_dictA)
@@ -368,6 +383,10 @@ class CNN_Simulator:
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
                 outA = np.random.rand(self.seq_len, self.output_units)-0.5
 
+            network_proctime_en = datetime.datetime.now()
+            proctime = (network_proctime_en-network_proctime_st).total_seconds()
+            print('proctime:{}s '.format(proctime))
+
             outB = []
             mag = 20
             for i in range(self.seq_len):
@@ -375,13 +394,13 @@ class CNN_Simulator:
 
                 diff, is_drawing = event.get_pos()
                 outB.append(diff)
-
-                _var = sum(np.var(outB,0))
+                print('DIFF: ', diff)
 
                 # ADJUST
                 time.sleep(0.05)
 
-            print('outB: ', np.array(outB)[:,0])
+
+            print('outB[:,0]: ', np.array(outB)[:,0])
             
             print('var', sum(np.var(outB,0)))
             # ADJUST
@@ -390,12 +409,11 @@ class CNN_Simulator:
                 outB = []
                 for i in range(int(np.ceil(self.seq_len/3))):
                     r = np.random.rand(1,2).tolist()
-                    if i == np.ceil(self.seq_len/3)-1:
+                    if i == np.ceil(self.seq_len/3)-1 and self.seq_len%3 != 0:
                         outB.extend(r*(self.seq_len%3))
                     else:
                         outB.extend(r*3)
                 outB = np.array(outB)
-                print('BBB: ',outB)
 
 
                 '''
@@ -427,7 +445,7 @@ class CNN_Simulator:
             print(self.activity)
             f.write(str(self.activity)+'\n')
 
-            if is_changemode and self.activity < 0.10:
+            if is_changemode and self.activity < 0.2:
                 print('[Change Mode]', self.activity)
                 modeA = not modeA
                 mode_switch.append(epoch)

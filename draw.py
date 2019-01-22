@@ -52,6 +52,7 @@ class Event:
         self.init_pos2 = [None]*2
 
         self.is_output = False
+        self.is_network_interval = False
 
         self.is_drawing = True
 
@@ -112,7 +113,7 @@ class Event:
         # self.canvas = tkinter.Canvas(self.frame, width=self.CANVAS_SIZE, height=self.CANVAS_SIZE, background='white')
         self.canvas = tkinter.Canvas(self.frame, width=self.canvas_w, height=self.canvas_h, background='black')
         # self.canvas.pack()
-        self.canvas.place(x=self.CANVAS_MARGIN, y=self.CANVAS_MARGIN)
+        self.canvas.place(x=self.CANVAS_MARGIN-1, y=self.CANVAS_MARGIN-1)
 
         self.frame.bind("<KeyPress>", self.keypress)
         self.frame.bind("<KeyRelease>", self.keyrelease)
@@ -242,6 +243,16 @@ class Event:
                 pygame.quit()
                 return
 
+            if self.x1_pos+self.dx1 < 0:
+                self.dx1 = -self.x1_pos
+            elif self.x1_pos+self.dx1 > self.canvas_w-self.CIRCLE_D:
+                self.dx1 = (self.canvas_w-self.CIRCLE_D)-self.x1_pos
+
+            if self.y1_pos+self.dy1 < 0:
+                self.dy1 = -self.y1_pos
+            elif self.y1_pos+self.dy1 > self.canvas_h-self.CIRCLE_D:
+                self.dy1 = (self.canvas_h-self.CIRCLE_D)-self.y1_pos
+
             self.x1_pos += self.dx1
             self.y1_pos += self.dy1
             self.canvas.move(circle1, self.dx1, self.dy1)
@@ -281,7 +292,7 @@ class Event:
 
         # Launch the system
         self.startup = True
-
+        
         _t = 0
         while True:
             self.frame.update()
@@ -296,8 +307,21 @@ class Event:
                 self.frame.update()
             
             # System-Output
-            if self.is_output:
-                self.is_output = False
+            if self.is_output or self.is_network_interval:
+
+                if self.is_network_interval:
+                    self.is_network_interval = False
+                    '''
+                    print('network interval: ', self.wait_time/self.wait_time_count)
+                    _wait_time_count += 1
+                    time.sleep(self.wait_time/self.wait_time_count)
+                    if self.wait_time_count == _wait_time_count:
+                        self.is_network_interval = False
+                        _wait_time_count = 0
+                    '''
+                if self.is_output:
+                    self.is_output = False
+
 
                 dx2_, dy2_ = self.dx2, self.dy2
                 self.x2_pos += dx2_
@@ -368,6 +392,16 @@ class Event:
                 self.on_closing()
                 pygame.quit()
                 return
+
+            if self.x1_pos+self.dx1 < 0:
+                self.dx1 = -self.x1_pos
+            elif self.x1_pos+self.dx1 > self.canvas_w-self.CIRCLE_D:
+                self.dx1 = (self.canvas_w-self.CIRCLE_D)-self.x1_pos
+
+            if self.y1_pos+self.dy1 < 0:
+                self.dy1 = -self.y1_pos
+            elif self.y1_pos+self.dy1 > self.canvas_h-self.CIRCLE_D:
+                self.dy1 = (self.canvas_h-self.CIRCLE_D)-self.y1_pos
 
             self.x1_pos += self.dx1
             self.y1_pos += self.dy1
@@ -453,10 +487,11 @@ class Event:
         copyfile(self.logfile, self.logfile+'.bk')
         print('Copy the logfile: ' + self.logfile+'.bk')
 
-        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='FINISH', font=('FixedSys',36), tags='text')
+        self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='FINISH', font=('FixedSys',36), tags='text', fill='white')
         self.canvas.delete('time')
         self.system_stop = True
         while not self.ARROW_KEYCODE['Enter'] in self.history:
+            print('Press Enter, Finish')
             pass
         self.on_closing()
 
@@ -496,6 +531,9 @@ class Event:
         dx_, dy_ = pos
         self.dx2, self.dy2 = dx_*mag, -dy_*mag
         self.is_output = True
+
+    def set_network_interval(self):
+        self.is_network_interval = True
 
     def keypress(self, event):
         # print(event.keycode)
