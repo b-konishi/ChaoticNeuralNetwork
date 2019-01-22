@@ -34,7 +34,7 @@ class Joycon:
             #print('{0:5d} axis {1:d}:{2: f}'.format(frame_no, e.axis, e.value))
 
             self.axislist[e.axis] = e.value
-            print('leftstick | x | {0: .3f} | z | {1: .3f} || rightstick | x | {2: .3f} | z | {3: .3f}'.format(self.axislist[0], self.axislist[1], self.axislist[2], self.axislist[3]))
+            # print('leftstick | x | {0: .3f} | z | {1: .3f} || rightstick | x | {2: .3f} | z | {3: .3f}'.format(self.axislist[0], self.axislist[1], self.axislist[2], self.axislist[3]))
 
         elif e.type == JOYHATMOTION:
             pass
@@ -52,7 +52,7 @@ class Joycon:
             elif e.type == JOYAXISMOTION:
                 self.axislist[e.axis] = e.value
                 self.rightaxis = self.axislist[2:3+1]
-                print('rightstick | x | {0:.3f} | z | {1:.3f}'.format(self.rightaxis[0], self.rightaxis[1]))
+                # print('rightstick | x | {0:.3f} | z | {1:.3f}'.format(self.rightaxis[0], self.rightaxis[1]))
 
         return self.rightaxis
 

@@ -345,8 +345,11 @@ class CNN_Simulator:
         
         f = open(self.act_logfile, mode='w')
 
+        print("SYSTEM_WAIT")
         while not event.get_startup_signal():
+            time.sleep(0.1)
             pass
+        time.sleep(0.5)
         # for epoch in range(self.epoch_size):
         while not event.get_systemstop_signal():
             print('epoch:{}, mode:{}'.format(epoch, modeA))

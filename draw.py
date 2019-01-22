@@ -121,6 +121,7 @@ class Event:
         # circle1 = self.canvas.create_oval(self.init_pos1, self.init_pos1, self.init_pos1+self.CIRCLE_D, self.init_pos1+self.CIRCLE_D, fill='blue', width=0)
         # circle2 = self.canvas.create_oval(self.init_pos2, self.init_pos2, self.init_pos2+self.CIRCLE_D, self.init_pos2+self.CIRCLE_D, fill='red', width=0)
 
+        '''
         circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
         self.canvas.tag_bind('t_circle1')
         circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
@@ -141,10 +142,9 @@ class Event:
             self.x1_pos += self.dx1
             self.y1_pos += self.dy1
             self.canvas.move(circle1, self.dx1, self.dy1)
-            time.sleep(0.1)
+        '''
             
-
-            '''
+        '''
             # User Input with Arrow-Key
             for key in self.history:
                 dx_, dy_ = self.dx1*100, self.dy1*100
@@ -177,7 +177,74 @@ class Event:
                     self.canvas.move(circle1, dx_, 0)
 
             self.dx1, self.dy1 = self.DIFF, self.DIFF
-            '''
+        '''
+
+        '''
+        self.canvas.delete('t_circle1')
+        self.canvas.delete('t_circle2')
+        self.init_position()
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
+        self.canvas.tag_bind('t_circle1')
+        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
+        self.canvas.tag_bind('t_circle2')
+
+        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text', fill='white')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
+        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='2', font=('FixedSys',36), tags='text', fill='white')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
+        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='1', font=('FixedSys',36), tags='text', fill='white')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
+        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='START', font=('FixedSys',36), tags='text', fill='white')
+        self.frame.update()
+        time.sleep(1)
+        self.canvas.delete('text')
+        '''
+
+        # update_thread = threading.Thread(target=self.update, args=[(circle1, circle2)])
+
+        update_thread = threading.Thread(target=self.update)
+        # When this window is shutdowned, this thread is also finished.
+        update_thread.daemon = True
+        update_thread.start()
+
+        # This thread must be worked in the background since it's infinite-loop.
+        self.frame.mainloop()
+
+    # Always Monitoring
+    def update(self):
+        # obj1, obj2 = obj
+        pre_pos1, pre_pos2 = [self.init_pos1]*2, [self.init_pos2]*2
+        R = self.CIRCLE_D/2
+
+        TRAJ_MAX = 50
+        trajectory1, trajectory2 = deque([]), deque([])
+
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
+        self.canvas.tag_bind('t_circle1')
+        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
+        self.canvas.tag_bind('t_circle2')
+
+        self.frame.update()
+        while not self.ARROW_KEYCODE['Enter'] in self.history:
+            self.frame.update()
+
+            try:
+                self.dx1, self.dy1 = np.array(self.joy.get_value())*0.05
+            except pygame.error:
+                print('Pygame ERROR')
+                self.on_closing()
+                pygame.quit()
+                return
+
+            self.x1_pos += self.dx1
+            self.y1_pos += self.dy1
+            self.canvas.move(circle1, self.dx1, self.dy1)
 
         self.canvas.delete('t_circle1')
         self.canvas.delete('t_circle2')
@@ -204,23 +271,6 @@ class Event:
         time.sleep(1)
         self.canvas.delete('text')
 
-        self.startup = True
-        update_thread = threading.Thread(target=self.update, args=[(circle1, circle2)])
-        # When this window is shutdowned, this thread is also finished.
-        update_thread.daemon = True
-        update_thread.start()
-
-        # This thread must be worked in the background since it's infinite-loop.
-        self.frame.mainloop()
-
-    # Always Monitoring
-    def update(self, obj):
-        obj1, obj2 = obj
-        pre_pos1, pre_pos2 = [self.init_pos1]*2, [self.init_pos2]*2
-        R = self.CIRCLE_D/2
-
-        TRAJ_MAX = 50
-        trajectory1, trajectory2 = deque([]), deque([])
 
         f = open(self.logfile, mode='w')
         writer = csv.writer(f, lineterminator='\n')
@@ -228,6 +278,9 @@ class Event:
         writer.writerow([self.testee,self.canvas_w,self.canvas_h,self.CIRCLE_D])
         writer.writerow(['time[ms]','x1','y1','x2','y2'])
         start_time = datetime.datetime.now()
+
+        # Launch the system
+        self.startup = True
 
         _t = 0
         while True:
@@ -282,7 +335,8 @@ class Event:
                     pre_pos2[1] = self.y2_pos
                     dy2_ = -dy2_
 
-                self.canvas.move(obj2, dx2_, dy2_)
+                self.canvas.move(circle2, dx2_, dy2_)
+                self.frame.update()
 
                 # Drawing the Trajectory
                 if self.IS_TRAJ:
@@ -307,7 +361,19 @@ class Event:
                 self.history.append(self.ARROW_KEYCODE['Down' if np.sign(self.dy1)>=1 else 'Up'])
                 time.sleep(0.1)
 
+            try:
+                self.dx1, self.dy1 = np.array(self.joy.get_value())*0.05
+            except pygame.error:
+                print('Pygame ERROR')
+                self.on_closing()
+                pygame.quit()
+                return
 
+            self.x1_pos += self.dx1
+            self.y1_pos += self.dy1
+            self.canvas.move(circle1, self.dx1, self.dy1)
+
+            '''
             # User Input with Arrow-Key
             for key in self.history:
                 dx_, dy_ = self.dx1, self.dy1
@@ -322,7 +388,7 @@ class Event:
                         pre_pos1[1] = self.y1_pos
                         # self.TORUS[1] = True
 
-                    self.canvas.move(obj1, 0, -dy_)
+                    self.canvas.move(circle1, 0, -dy_)
 
                 elif key == self.ARROW_KEYCODE['Down']:
                     self.y1_pos += self.dy1
@@ -334,7 +400,7 @@ class Event:
                         pre_pos1[1] = self.y1_pos
                         # self.TORUS[1] = True
 
-                    self.canvas.move(obj1, 0, dy_)
+                    self.canvas.move(circle1, 0, dy_)
 
                 elif key == self.ARROW_KEYCODE['Left']:
                     self.x1_pos -= self.dx1
@@ -346,7 +412,7 @@ class Event:
                         pre_pos1[0] = self.x1_pos
                         # self.TORUS[0] = True
 
-                    self.canvas.move(obj1, -dx_, 0)
+                    self.canvas.move(circle1, -dx_, 0)
 
                 elif key == self.ARROW_KEYCODE['Right']:
                     self.x1_pos += self.dx1
@@ -358,9 +424,10 @@ class Event:
                         pre_pos1[0] = self.x1_pos
                         # self.TORUS[0] = True
 
-                    self.canvas.move(obj1, dx_, 0)
+                    self.canvas.move(circle1, dx_, 0)
 
             self.dx1, self.dy1 = self.DIFF, self.DIFF
+            '''
 
             t = int((datetime.datetime.now()-start_time).total_seconds()*1000)
             writer.writerow([t, self.x1_pos, self.y1_pos, self.x2_pos, self.y2_pos])
