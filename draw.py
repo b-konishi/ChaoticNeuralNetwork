@@ -10,7 +10,10 @@ import datetime
 import os
 from shutil import copyfile
 
-class Event():
+import read_joy as joycon
+import pygame
+
+class Event:
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
 
@@ -59,6 +62,9 @@ class Event():
 
         self.logfile = '../log.txt'
         self.testee = 'a'
+
+        pygame.init()
+        self.joy = joycon.Joycon()
 
         animation_thread = threading.Thread(target=self.animation)
         animation_thread.start()
@@ -124,6 +130,21 @@ class Event():
         while not self.ARROW_KEYCODE['Enter'] in self.history:
             self.frame.update()
 
+            try:
+                self.dx1, self.dy1 = np.array(self.joy.get_value())*5
+            except pygame.error:
+                print('Pygame ERROR')
+                self.on_closing()
+                pygame.quit()
+                return
+
+            self.x1_pos += self.dx1
+            self.y1_pos += self.dy1
+            self.canvas.move(circle1, self.dx1, self.dy1)
+            time.sleep(0.1)
+            
+
+            '''
             # User Input with Arrow-Key
             for key in self.history:
                 dx_, dy_ = self.dx1*100, self.dy1*100
@@ -156,6 +177,7 @@ class Event():
                     self.canvas.move(circle1, dx_, 0)
 
             self.dx1, self.dy1 = self.DIFF, self.DIFF
+            '''
 
         self.canvas.delete('t_circle1')
         self.canvas.delete('t_circle2')
