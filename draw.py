@@ -26,7 +26,7 @@ class Event:
     CIRCLE_D = 30
     LINE_WIDTH = 2
 
-    INTERACTIVE_TIME = 2*60
+    INTERACTIVE_TIME = 3*60
 
     DIFF = 0.04
 
@@ -302,7 +302,8 @@ class Event:
             t = self.INTERACTIVE_TIME - int((datetime.datetime.now()-start_time).total_seconds())
             if t != _t:
                 self.canvas.delete('time')
-                self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}:{mode:}'.format(minutes=int(t/60), seconds=t%60, mode='IMITATE' if self.system_mode else 'CHAOTIC'), font=('FixedSys',24), tags='time', fill='white')
+                # self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}:{mode:}'.format(minutes=int(t/60), seconds=t%60, mode='IMITATE' if self.system_mode else 'CHAOTIC'), font=('FixedSys',24), tags='time', fill='white')
+                self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time', fill='white')
                 _t = t
                 self.frame.update()
             

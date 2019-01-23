@@ -69,7 +69,7 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 25
+        self.seq_len = 30
         self.epoch_size = 100
 
         self.input_units = 2
@@ -343,7 +343,16 @@ class CNN_Simulator:
         trajectoryB = []
         init_pos1, init_pos2 = event.get_init_pos()
 
-        outB = np.random.rand(self.seq_len, 2)
+        # outB = np.random.rand(self.seq_len, 2)
+        outB = []
+        for i in range(int(np.ceil(self.seq_len/3))):
+            r = np.random.rand(1,2).tolist()
+            if i == np.ceil(self.seq_len/3)-1 and self.seq_len%3 != 0:
+                outB.extend(r*(self.seq_len%3))
+            else:
+                outB.extend(r*3)
+        outB = np.array(outB)
+
         is_drawing = True
         is_changemode = True
         _premodeA = modeA
@@ -358,7 +367,6 @@ class CNN_Simulator:
         while not event.get_startup_signal():
             time.sleep(0.1)
             pass
-        time.sleep(0.5)
         # for epoch in range(self.epoch_size):
         while not event.get_systemstop_signal():
             print('epoch:{}, mode:{}'.format(epoch, modeA))
@@ -445,7 +453,7 @@ class CNN_Simulator:
             print(self.activity)
             f.write(str(self.activity)+'\n')
 
-            if is_changemode and self.activity < 0.2:
+            if is_changemode and self.activity < 0.24:
                 print('[Change Mode]', self.activity)
                 modeA = not modeA
                 mode_switch.append(epoch)
