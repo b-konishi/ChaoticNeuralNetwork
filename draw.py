@@ -14,10 +14,12 @@ import read_joy as joycon
 import pygame
 
 class Event:
+    DEBUG = False
+
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
 
-    IS_TRAJ = False
+    IS_TRAJ = True
 
     DISP_SIZE = 1000
     CANVAS_MARGIN = 0
@@ -27,8 +29,12 @@ class Event:
     LINE_WIDTH = 2
 
     INTERACTIVE_TIME = 3*60
+    TESTING_TIME = 15
 
     DIFF = 0.04
+
+    USER_COLOR = '#ff4500'
+    COM_COLOR = '#32cd32'
 
     # 1:USER, 2:SYSTEM
     # INIT_POS1 = DISP_SIZE/2 - CIRCLE_D*2
@@ -119,13 +125,13 @@ class Event:
         self.frame.bind("<KeyRelease>", self.keyrelease)
         self.frame.bind("<FocusOut>", self.focusout)
 
-        # circle1 = self.canvas.create_oval(self.init_pos1, self.init_pos1, self.init_pos1+self.CIRCLE_D, self.init_pos1+self.CIRCLE_D, fill='blue', width=0)
-        # circle2 = self.canvas.create_oval(self.init_pos2, self.init_pos2, self.init_pos2+self.CIRCLE_D, self.init_pos2+self.CIRCLE_D, fill='red', width=0)
+        # circle1 = self.canvas.create_oval(self.init_pos1, self.init_pos1, self.init_pos1+self.CIRCLE_D, self.init_pos1+self.CIRCLE_D, fill=self.USER_COLOR, width=0)
+        # circle2 = self.canvas.create_oval(self.init_pos2, self.init_pos2, self.init_pos2+self.CIRCLE_D, self.init_pos2+self.CIRCLE_D, fill=self.COM_COLOR, width=0)
 
         '''
-        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill=self.USER_COLOR, width=0, tags='t_circle1')
         self.canvas.tag_bind('t_circle1')
-        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
+        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill=self.COM_COLOR, width=0, tags='t_circle2')
         self.canvas.tag_bind('t_circle2')
 
         self.frame.update()
@@ -184,9 +190,9 @@ class Event:
         self.canvas.delete('t_circle1')
         self.canvas.delete('t_circle2')
         self.init_position()
-        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill=self.USER_COLOR, width=0, tags='t_circle1')
         self.canvas.tag_bind('t_circle1')
-        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
+        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill=self.COM_COLOR, width=0, tags='t_circle2')
         self.canvas.tag_bind('t_circle2')
 
         self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text', fill='white')
@@ -217,22 +223,42 @@ class Event:
         # This thread must be worked in the background since it's infinite-loop.
         self.frame.mainloop()
 
+
     # Always Monitoring
     def update(self):
         # obj1, obj2 = obj
-        pre_pos1, pre_pos2 = [self.init_pos1]*2, [self.init_pos2]*2
+        prepos1, pre_pos2 = self.init_pos1, self.init_pos2
         R = self.CIRCLE_D/2
 
-        TRAJ_MAX = 50
+        # num of traj-line
+        TRAJ_MAX = 20
+        # traj-line length
+        line_len = 30
         trajectory1, trajectory2 = deque([]), deque([])
 
-        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill=self.USER_COLOR, width=0, tags='t_circle1')
         self.canvas.tag_bind('t_circle1')
-        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
-        self.canvas.tag_bind('t_circle2')
+        # circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill=self.COM_COLOR, width=0, tags='t_circle2')
+        # self.canvas.tag_bind('t_circle2')
 
         self.frame.update()
+
+        print('Press Enter, Start')
         while not self.ARROW_KEYCODE['Enter'] in self.history:
+            pass
+
+        _t = 0
+        start_time = datetime.datetime.now()
+        while True:
+            self.frame.update()
+
+            # Time
+            t = self.TESTING_TIME - int((datetime.datetime.now()-start_time).total_seconds())
+            if t != _t:
+                self.canvas.delete('time')
+                self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time', fill='white')
+                _t = t
+
             self.frame.update()
 
             try:
@@ -257,13 +283,39 @@ class Event:
             self.y1_pos += self.dy1
             self.canvas.move(circle1, self.dx1, self.dy1)
 
+            if self.IS_TRAJ:
+                diff = np.sqrt(sum((np.array(prepos1)-np.array([self.x1_pos, self.y1_pos]))**2))
+                if diff >= line_len:
+                    # _line = self.canvas.create_line(prepos1[0]+R, prepos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill=self.USER_COLOR, width=self.LINE_WIDTH, dash=((3,3) if self.system_mode==simulation.CNN_Simulator.CREATIVE_MODE else ()))
+                    _line = self.canvas.create_line(prepos1[0]+R, prepos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill=self.USER_COLOR, width=self.LINE_WIDTH, dash=(3,3))
+                    trajectory1.append(_line)
+                    prepos1 = [self.x1_pos, self.y1_pos]
+                    
+                    if len(trajectory1) > TRAJ_MAX:
+                        self.canvas.delete(trajectory1.popleft())
+
+            t = int((datetime.datetime.now()-start_time).total_seconds()*1000)
+            if t/1000 > self.TESTING_TIME:
+                break
+
+        # Delete & Initialize the trajectory
+        while len(trajectory1) != 0:
+            self.canvas.delete(trajectory1.popleft())
+        prepos1 = self.init_pos1
+        trajectory1 = deque([])
+
+        self.canvas.delete('time')
         self.canvas.delete('t_circle1')
-        self.canvas.delete('t_circle2')
+        # self.canvas.delete('t_circle2')
         self.init_position()
-        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill='#ff4500', width=0, tags='t_circle1')
+        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill=self.USER_COLOR, width=0, tags='t_circle1')
         self.canvas.tag_bind('t_circle1')
-        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill='#32cd32', width=0, tags='t_circle2')
+        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill=self.COM_COLOR, width=0, tags='t_circle2')
         self.canvas.tag_bind('t_circle2')
+
+        print('Press Enter, Start')
+        while not self.ARROW_KEYCODE['Enter'] in self.history:
+            pass
 
         self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text', fill='white')
         self.frame.update()
@@ -302,8 +354,10 @@ class Event:
             t = self.INTERACTIVE_TIME - int((datetime.datetime.now()-start_time).total_seconds())
             if t != _t:
                 self.canvas.delete('time')
-                # self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}:{mode:}'.format(minutes=int(t/60), seconds=t%60, mode='IMITATE' if self.system_mode else 'CHAOTIC'), font=('FixedSys',24), tags='time', fill='white')
-                self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time', fill='white')
+                if self.DEBUG:
+                    self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}:{mode:}'.format(minutes=int(t/60), seconds=t%60, mode='IMITATE' if self.system_mode else 'CHAOTIC'), font=('FixedSys',24), tags='time', fill='white')
+                else:
+                    self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time', fill='white')
                 _t = t
                 self.frame.update()
             
@@ -323,11 +377,9 @@ class Event:
                 if self.is_output:
                     self.is_output = False
 
-
                 dx2_, dy2_ = self.dx2, self.dy2
                 self.x2_pos += dx2_
                 self.y2_pos += dy2_
-
 
                 if self.x2_pos < 0:
                     # dx2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.x2_pos-dx2_)
@@ -335,7 +387,7 @@ class Event:
                     # dx2_ = self.x2_pos-self.dx2
                     # self.x2_pos = 0
                     self.x2_pos -= dx2_*2
-                    pre_pos2[0] = self.x2_pos
+                    # pre_pos2[0] = self.x2_pos
                     dx2_ = -dx2_
                 elif self.x2_pos > self.canvas_w-self.CIRCLE_D:
                     # dx2_ = 0 - (self.x2_pos-dx2_)
@@ -343,21 +395,21 @@ class Event:
                     # dx2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.x2_pos-dx2_)
                     # self.x2_pos = self.CANVAS_SIZE-self.CIRCLE_D
                     self.x2_pos -= dx2_*2
-                    pre_pos2[0] = self.x2_pos
+                    # pre_pos2[0] = self.x2_pos
                     dx2_ = -dx2_
 
                 if self.y2_pos < 0:
                     # dy2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.y2_pos-dy2_)
                     # self.y2_pos = self.CANVAS_SIZE-self.CIRCLE_D
                     self.y2_pos -= dy2_*2
-                    pre_pos2[1] = self.y2_pos
+                    # pre_pos2[1] = self.y2_pos
                     dy2_ = -dy2_
                 elif self.y2_pos > self.canvas_h-self.CIRCLE_D:
                     print('posy2: ', self.y2_pos)
                     # dy2_ = 0 - (self.y2_pos-dy2_)
                     # self.y2_pos = 0
                     self.y2_pos -= dy2_*2
-                    pre_pos2[1] = self.y2_pos
+                    # pre_pos2[1] = self.y2_pos
                     dy2_ = -dy2_
 
                 self.canvas.move(circle2, dx2_, dy2_)
@@ -366,8 +418,9 @@ class Event:
                 # Drawing the Trajectory
                 if self.IS_TRAJ:
                     diff = np.sqrt(sum((np.array(pre_pos2)-np.array([self.x2_pos, self.y2_pos]))**2))
-                    if diff >= line_interval:
-                        _line = self.canvas.create_line(pre_pos2[0]+R, pre_pos2[1]+R, self.x2_pos+R, self.y2_pos+R, fill='red', width=self.LINE_WIDTH, dash=((3,3) if self.system_mode==simulation.CNN_Simulator.CREATIVE_MODE else ()))
+                    if diff >= line_len:
+                        # _line = self.canvas.create_line(pre_pos2[0]+R, pre_pos2[1]+R, self.x2_pos+R, self.y2_pos+R, fill=self.COM_COLOR, width=self.LINE_WIDTH, dash=((3,3) if self.system_mode==simulation.CNN_Simulator.CREATIVE_MODE else ()))
+                        _line = self.canvas.create_line(pre_pos2[0]+R, pre_pos2[1]+R, self.x2_pos+R, self.y2_pos+R, fill=self.COM_COLOR, width=self.LINE_WIDTH, dash=(3,3))
                         trajectory2.append(_line)
                         pre_pos2 = [self.x2_pos, self.y2_pos]
                         
@@ -407,6 +460,17 @@ class Event:
             self.x1_pos += self.dx1
             self.y1_pos += self.dy1
             self.canvas.move(circle1, self.dx1, self.dy1)
+
+            if self.IS_TRAJ:
+                diff = np.sqrt(sum((np.array(prepos1)-np.array([self.x1_pos, self.y1_pos]))**2))
+                if diff >= line_len:
+                    # _line = self.canvas.create_line(prepos1[0]+R, prepos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill=self.USER_COLOR, width=self.LINE_WIDTH, dash=((3,3) if self.system_mode==simulation.CNN_Simulator.CREATIVE_MODE else ()))
+                    _line = self.canvas.create_line(prepos1[0]+R, prepos1[1]+R, self.x1_pos+R, self.y1_pos+R, fill=self.USER_COLOR, width=self.LINE_WIDTH, dash=(3,3))
+                    trajectory1.append(_line)
+                    prepos1 = [self.x1_pos, self.y1_pos]
+                    
+                    if len(trajectory1) > TRAJ_MAX:
+                        self.canvas.delete(trajectory1.popleft())
 
             '''
             # User Input with Arrow-Key

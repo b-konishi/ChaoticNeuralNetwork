@@ -69,7 +69,7 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 30
+        self.seq_len = 20
         self.epoch_size = 100
 
         self.input_units = 2
@@ -396,7 +396,7 @@ class CNN_Simulator:
             print('proctime:{}s '.format(proctime))
 
             outB = []
-            mag = 20
+            mag = 25
             for i in range(self.seq_len):
                 event.set_movement(np.array(outA[i]), mag)
 
@@ -453,7 +453,7 @@ class CNN_Simulator:
             print(self.activity)
             f.write(str(self.activity)+'\n')
 
-            if is_changemode and self.activity < 0.24:
+            if is_changemode and self.activity < 0.12:
                 print('[Change Mode]', self.activity)
                 modeA = not modeA
                 mode_switch.append(epoch)
