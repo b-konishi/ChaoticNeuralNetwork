@@ -14,7 +14,7 @@ import read_joy as joycon
 import pygame
 
 class Event:
-    DEBUG = False
+    DEBUG = True
 
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
@@ -226,6 +226,12 @@ class Event:
 
     # Always Monitoring
     def update(self):
+        if self.DEBUG:
+            self.canvas.create_text(100, 50, justify='left', text='DEBUG', font=('FixedSys',24), tags='debug', fill='yellow')
+            self.canvas.create_text(self.frame.winfo_screenwidth()-100, 50, justify='left', text='DEBUG', font=('FixedSys',24), tags='debug', fill='red')
+
+            self.TESTING_TIME = 3
+
         # obj1, obj2 = obj
         prepos1, pre_pos2 = self.init_pos1, self.init_pos2
         R = self.CIRCLE_D/2
