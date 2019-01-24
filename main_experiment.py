@@ -389,14 +389,22 @@ class CNN_Simulator:
                 writerA.add_summary(summaryA, epoch)
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
-                outA = np.random.rand(self.seq_len, self.output_units)-0.5
+                # outA = np.random.rand(self.seq_len, self.output_units)-0.5
+                outA = []
+                for i in range(int(np.ceil(self.seq_len/3))):
+                    r = (np.random.rand(1,self.output_units)-0.5).tolist()
+                    if i == np.ceil(self.seq_len/3)-1 and self.seq_len%3 != 0:
+                        outA.extend(r*(self.seq_len%3))
+                    else:
+                        outA.extend(r*3)
+                outA = np.array(outA)
 
             network_proctime_en = datetime.datetime.now()
             proctime = (network_proctime_en-network_proctime_st).total_seconds()
             print('proctime:{}s '.format(proctime))
 
             outB = []
-            mag = 25
+            mag = 30
             for i in range(self.seq_len):
                 event.set_movement(np.array(outA[i]), mag)
 
@@ -453,7 +461,7 @@ class CNN_Simulator:
             print(self.activity)
             f.write(str(self.activity)+'\n')
 
-            if is_changemode and self.activity < 0.12:
+            if is_changemode and self.activity < 0.11:
                 print('[Change Mode]', self.activity)
                 modeA = not modeA
                 mode_switch.append(epoch)
