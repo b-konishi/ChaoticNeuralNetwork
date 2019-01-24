@@ -249,9 +249,13 @@ class CNN_Simulator:
             # 出力値同士の差別化項
             diff_term = tf.reduce_sum(tf.log(tf.abs(tf.abs(outputs[:,0])-tf.abs(outputs[:,1]))+1e-10))
 
+            # 差別化するのは人間をモデル化する上でおかしい
+            # 同じパターンがこないようにしたい=飽きと解釈できる
+            # diff_term = log(var(X)+1e-10)+log(var(Y)+1e-10)
 
-            return -(te_term+diff_term), te_term, diff_term, _pdf
-            return -(te_term), te_term, diff_term, _pdf
+
+            return -te_term, te_term, diff_term, _pdf
+            # return -(te_term+diff_term), te_term, diff_term, _pdf
 
         '''
         with tf.name_scope('loss_lyapunov'):
@@ -383,6 +387,7 @@ class CNN_Simulator:
             network_proctime_st = datetime.datetime.now()
 
             # event.set_network_interval(proctime, 3)
+            # ネットワークの学習処理時間を埋めるための処理
             networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
             networkbg_thread.daemon = True
             networkbg_thread.start()
@@ -592,7 +597,7 @@ class CNN_Simulator:
 
 
 if __name__ == "__main__":
-    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.CHAOTIC_BEHAVIOR)
+    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.RANDOM_BEHAVIOR)
     # simulator.learning1()
     # simulator.robot_robot_interaction()
     simulator.human_agent_interaction()
