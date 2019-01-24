@@ -15,6 +15,7 @@ import pygame
 
 class Event:
     DEBUG = False
+    DEBUG = True
 
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
@@ -28,7 +29,7 @@ class Event:
     CIRCLE_D = 30
     LINE_WIDTH = 2
 
-    INTERACTIVE_TIME = 2*60
+    INTERACTIVE_TIME = 5*60
     TESTING_TIME = 15
 
     DIFF = 0.04
@@ -561,8 +562,9 @@ class Event:
         self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text='FINISH', font=('FixedSys',36), tags='text', fill='white')
         self.canvas.delete('time')
         self.system_stop = True
+        print('Press Enter, Finish')
         while not self.ARROW_KEYCODE['Enter'] in self.history:
-            print('Press Enter, Finish')
+            time.sleep(0.01)
             pass
         self.on_closing()
 

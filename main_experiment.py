@@ -244,7 +244,14 @@ class CNN_Simulator:
                 entropy.append(_entropy)
                 tf.summary.scalar('entropy{}'.format(i), entropy[i])
 
-            return -tf.reduce_mean(entropy), _pdf
+            te_term = tf.reduce_mean(entropy)
+
+            # 出力値同士の差別化項
+            diff_term = tf.reduce_sum(tf.log(tf.abs(tf.abs(outputs[:,0])-tf.abs(outputs[:,1]))+1e-10))
+
+
+            return -(te_term+diff_term), te_term, diff_term, _pdf
+            return -(te_term), te_term, diff_term, _pdf
 
         '''
         with tf.name_scope('loss_lyapunov'):
@@ -312,8 +319,10 @@ class CNN_Simulator:
         norm_in, inputs, outputs, params = self.inference(self.seq_len)
         Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
 
-        error, pdf = self.loss(norm_in, outputs, self.seq_len, Mode)
+        error, te_term, diff_term, pdf = self.loss(norm_in, outputs, self.seq_len, Mode)
         tf.summary.scalar('error', error)
+        tf.summary.scalar('te_term', te_term)
+        tf.summary.scalar('diff_term', diff_term)
         train_step, grad = self.train(error, [Wi, bi, Wo, bo])
 
         merged = tf.summary.merge_all()
@@ -379,11 +388,13 @@ class CNN_Simulator:
             networkbg_thread.start()
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
-                outA, gradientsA = sess.run([outputs, grad], feed_dict=feed_dictA)
+                outA, _te_term, _diff_term, gradientsA = sess.run([outputs, te_term, diff_term, grad], feed_dict=feed_dictA)
 
                 if epoch % 1 == 0:
                     for (g, v) in gradientsA:
                         print('gradA: ', g[0][0:5])
+                        print('te_term: ', _te_term)
+                        print('diff_term: ', _diff_term)
 
                 summaryA, _ = sess.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
@@ -410,7 +421,6 @@ class CNN_Simulator:
 
                 diff, is_drawing = event.get_pos()
                 outB.append(diff)
-                print('DIFF: ', diff)
 
                 # ADJUST
                 time.sleep(0.05)
@@ -461,7 +471,7 @@ class CNN_Simulator:
             print(self.activity)
             f.write(str(self.activity)+'\n')
 
-            if is_changemode and self.activity < 0.11:
+            if is_changemode and self.activity < 0.08:
                 print('[Change Mode]', self.activity)
                 modeA = not modeA
                 mode_switch.append(epoch)
