@@ -69,7 +69,7 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 20
+        self.seq_len = 10
         self.epoch_size = 100
 
         self.input_units = 2
@@ -325,7 +325,7 @@ class CNN_Simulator:
 
         error, te_term, diff_term, pdf = self.loss(norm_in, outputs, self.seq_len, Mode)
         tf.summary.scalar('error', error)
-        tf.summary.scalar('te_term', te_term)
+        # tf.summary.scalar('te_term', te_term)
         tf.summary.scalar('diff_term', diff_term)
         train_step, grad = self.train(error, [Wi, bi, Wo, bo])
 
@@ -373,6 +373,7 @@ class CNN_Simulator:
         outA_all, outB_all = [], []
         epoch = 0
         proctime = 1
+        t_entropy = []
         
         f = open(self.act_logfile, mode='w')
 
@@ -394,6 +395,7 @@ class CNN_Simulator:
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
                 outA, _te_term, _diff_term, gradientsA = sess.run([outputs, te_term, diff_term, grad], feed_dict=feed_dictA)
+                t_entropy.append(_te_term)
 
                 if epoch % 1 == 0:
                     for (g, v) in gradientsA:
@@ -469,18 +471,31 @@ class CNN_Simulator:
             outB_all.extend(outB)
 
 
-            # Mesuring the amount of activity
-            d1 = np.mean(abs(np.diff(outB[:,0])))
-            d2 = np.mean(abs(np.diff(outB[:,1])))
-            self.activity = np.mean([d1,d2])
-            print(self.activity)
-            f.write(str(self.activity)+'\n')
+            if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
+                print('TE-diff: ', np.diff(t_entropy))
+                if len(t_entropy) == 10 and np.mean(np.diff(t_entropy)) > 1:
+                    print('[Change Mode]')
+                    modeA = not modeA
+                    mode_switch.append(epoch)
+                    event.set_system_mode(modeA)
+                
 
-            if is_changemode and self.activity < 0.08:
-                print('[Change Mode]', self.activity)
-                modeA = not modeA
-                mode_switch.append(epoch)
-                event.set_system_mode(modeA)
+            '''
+            if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
+
+                # Mesuring the amount of activity
+                d1 = np.mean(abs(np.diff(outB[:,0])))
+                d2 = np.mean(abs(np.diff(outB[:,1])))
+                self.activity = np.mean([d1,d2])
+                print(self.activity)
+                f.write(str(self.activity)+'\n')
+
+                if is_changemode and self.activity < 0.08:
+                    print('[Change Mode]', self.activity)
+                    modeA = not modeA
+                    mode_switch.append(epoch)
+                    event.set_system_mode(modeA)
+            '''
 
             '''
             # A: SYSTEM, B: USER
@@ -597,7 +612,7 @@ class CNN_Simulator:
 
 
 if __name__ == "__main__":
-    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.RANDOM_BEHAVIOR)
+    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.CHAOTIC_BEHAVIOR)
     # simulator.learning1()
     # simulator.robot_robot_interaction()
     simulator.human_agent_interaction()
