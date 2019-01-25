@@ -13,6 +13,7 @@ import numpy as np
 import threading
 import warnings
 import datetime
+from collections import deque
 
 # Tensorflow
 import tensorflow as tf
@@ -247,11 +248,15 @@ class CNN_Simulator:
             te_term = tf.reduce_mean(entropy)
 
             # 出力値同士の差別化項
-            diff_term = tf.reduce_sum(tf.log(tf.abs(tf.abs(outputs[:,0])-tf.abs(outputs[:,1]))+1e-10))
+            # diff_term = tf.reduce_sum(tf.log(tf.abs(tf.abs(outputs[:,0])-tf.abs(outputs[:,1]))+1e-10))
 
             # 差別化するのは人間をモデル化する上でおかしい
             # 同じパターンがこないようにしたい=飽きと解釈できる
-            # diff_term = log(var(X)+1e-10)+log(var(Y)+1e-10)
+            # ただし、絶対座標には適用できないだろう
+            # diff_term = tf.log(tf.var(outputs[:,0])+1e-10)+tf.log(tf.var(outputs[:,1])+1e-10)
+            _, var_x = tf.nn.moments(outputs[:,0], [0])
+            _, var_y = tf.nn.moments(outputs[:,1], [0])
+            diff_term = tf.log(var_x+1e-10)+tf.log(var_y+1e-10)
 
 
             return -te_term, te_term, diff_term, _pdf
@@ -325,7 +330,7 @@ class CNN_Simulator:
 
         error, te_term, diff_term, pdf = self.loss(norm_in, outputs, self.seq_len, Mode)
         tf.summary.scalar('error', error)
-        # tf.summary.scalar('te_term', te_term)
+        tf.summary.scalar('te_term', te_term)
         tf.summary.scalar('diff_term', diff_term)
         train_step, grad = self.train(error, [Wi, bi, Wo, bo])
 
@@ -373,7 +378,7 @@ class CNN_Simulator:
         outA_all, outB_all = [], []
         epoch = 0
         proctime = 1
-        t_entropy = []
+        t_entropy = deque([])
         
         f = open(self.act_logfile, mode='w')
 
@@ -395,7 +400,6 @@ class CNN_Simulator:
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
                 outA, _te_term, _diff_term, gradientsA = sess.run([outputs, te_term, diff_term, grad], feed_dict=feed_dictA)
-                t_entropy.append(_te_term)
 
                 if epoch % 1 == 0:
                     for (g, v) in gradientsA:
@@ -472,9 +476,17 @@ class CNN_Simulator:
 
 
             if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
+                t_entropy.append(_te_term)
+                if len(t_entropy) > 30:
+                    t_entropy.popleft()
+
+                switch_prob = 1/(abs(np.mean(np.diff(t_entropy)))+1)
                 print('TE-diff: ', np.diff(t_entropy))
-                if len(t_entropy) == 10 and np.mean(np.diff(t_entropy)) > 1:
+                print('Pr(switch) = ', switch_prob)
+
+                if len(t_entropy) == 30 and switch_prob > (np.random.rand()*0.5)+0.5:
                     print('[Change Mode]')
+                    t_entropy = deque([])
                     modeA = not modeA
                     mode_switch.append(epoch)
                     event.set_system_mode(modeA)
