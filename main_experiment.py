@@ -69,7 +69,7 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 20
+        self.seq_len = 30
         self.epoch_size = 100
 
         self.input_units = 2
