@@ -14,8 +14,8 @@ import read_joy as joycon
 import pygame
 
 class Event:
-    DEBUG = False
     DEBUG = True
+    DEBUG = False
 
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
@@ -29,7 +29,7 @@ class Event:
     CIRCLE_D = 30
     LINE_WIDTH = 2
 
-    INTERACTIVE_TIME = 5*60
+    INTERACTIVE_TIME = 3*60
     TESTING_TIME = 15
 
     DIFF = 0.04
