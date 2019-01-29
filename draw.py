@@ -238,9 +238,9 @@ class Event:
         R = self.CIRCLE_D/2
 
         # num of traj-line
-        TRAJ_MAX = 20
+        TRAJ_MAX = 30
         # traj-line length
-        line_len = 30
+        line_len = 20
         trajectory1, trajectory2 = deque([]), deque([])
 
         circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill=self.USER_COLOR, width=0, tags='t_circle1')

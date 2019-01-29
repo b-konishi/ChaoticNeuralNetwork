@@ -371,6 +371,16 @@ class CNN_Simulator:
             time.sleep(proctime/num)
             event.set_network_interval()
             
+    '''
+    def open_uniform_knot_vector(self, m, n):
+        ret = np.zeros([1,m])
+        for i in np.linspace()
+
+        return ret
+
+
+    def basis_func(self, u, j, n, t):
+    '''
 
 
 
@@ -477,17 +487,35 @@ class CNN_Simulator:
                     else:
                         outA.extend(r*3)
                 outA = np.array(outA)
-                # 移動平均
-                for i in range(len(outA)-1):
-                    outA[i+1,:] = (outA[i,:]+outA[i+1,:])/2
-                    pass
+            # 移動平均
+            '''
+            p = len(outA)
+            n = 3
+            m = p + n + 1
+            u = self.open_uniform_knot_vector(m,n)
+            t = 0:0.01:u[-1]
+
+            S = np.zeros([len(t), 2])
+            S[1,:] = outA[1,:]
+            for i in np.array(range(len(t)-2))+2:
+                for j in np.array(range(len(p)-1))+1:
+                    b = self.basis_func(u, j, n, t[i])
+                    S[i,:] = S[i,:] + P[j,:]*b
+            '''
+            size = 3
+            for i in range(len(outA)-(size-1)):
+                _out = 0
+                for j in range(size):
+                    _out += outA[i+j,:]
+                outA[i+(size-1),:] = _out/(size-1)
+                pass
 
             network_proctime_en = datetime.datetime.now()
             proctime = (network_proctime_en-network_proctime_st).total_seconds()
             print('proctime:{}s '.format(proctime))
 
             outB = []
-            mag = 30
+            mag = 20
             for i in range(self.seq_len):
                 event.set_movement(np.array(outA[i]), mag)
 
