@@ -29,7 +29,7 @@ class Event:
     CIRCLE_D = 30
     LINE_WIDTH = 2
 
-    INTERACTIVE_TIME = 5*60
+    INTERACTIVE_TIME = 2*60
     TESTING_TIME = 15
 
     DIFF = 0.04
@@ -231,7 +231,7 @@ class Event:
             self.canvas.create_text(100, 50, justify='left', text='DEBUG', font=('FixedSys',24), tags='debug', fill='yellow')
             self.canvas.create_text(self.frame.winfo_screenwidth()-100, 50, justify='left', text='DEBUG', font=('FixedSys',24), tags='debug', fill='red')
 
-            self.TESTING_TIME = 3
+            self.TESTING_TIME = 1
 
         # obj1, obj2 = obj
         prepos1, pre_pos2 = self.init_pos1, self.init_pos2
@@ -579,7 +579,7 @@ class Event:
     def set_system_mode(self, mode):
         self.system_mode = mode
 
-    def get_pos(self):
+    def get_diff(self):
         pos = [self.x1_pos, self.y1_pos]
         _pre_pos, _pos = np.array(self.preget_pos1), np.array(pos)
 
@@ -593,7 +593,9 @@ class Event:
         diff = [diff[0], -diff[1]]
         self.preget_pos1 = pos
 
-        return diff, self.is_drawing
+        diff_pos = [self.x1_pos-self.x2_pos, self.y1_pos-self.y2_pos]
+
+        return diff, diff_pos, self.is_drawing
 
     def init_position(self):
         self.x1_pos, self.y1_pos = self.init_pos1

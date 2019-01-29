@@ -70,10 +70,10 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 10
+        self.seq_len = 20
         self.epoch_size = 100
 
-        self.input_units = 2
+        self.input_units = 4
         self.inner_units = 10
         self.output_units = 2
 
@@ -112,6 +112,7 @@ class CNN_Simulator:
         with tf.name_scope('Normalize'):
             # Normalize [-0.5, 0.5]
             norm = (v-tf.reduce_min(v,0))/(tf.reduce_max(v,0)-tf.reduce_min(v,0)) - 0.5
+            # norm = (v-tf.reduce_min(v))/(tf.reduce_max(v)-tf.reduce_min(v)) - 0.5
 
             # sign = tf.nn.relu(tf.sign(v))
             # return tf.where(tf.is_nan(norm), sign, norm)
@@ -152,6 +153,7 @@ class CNN_Simulator:
 
             # input: [None, input_units]
             in_norm = self.tf_normalize(inputs)
+            # in_norm = inputs
             fi = tf.matmul(in_norm, Wi) + bi
             sigm = tf.nn.sigmoid(fi)
 
@@ -206,6 +208,28 @@ class CNN_Simulator:
 
         return lyapunov
 
+    def x_input(self, x, y):
+        ic = probability.InfoContent()
+        te_term = 0
+        for i in range(self.input_units):
+            for j in range(self.output_units):
+                _x, _y = x[:,i], y[:,j]
+                # TE(y->x)
+                _en, _pdf = ic.tf_get_TE(_x, _y, self.seq_len)
+                te_term += _en
+        return te_term
+
+    def x_output(self, x, y):
+        ic = probability.InfoContent()
+        te_term = 0
+        for i in range(self.output_units):
+            for j in range(self.input_units):
+                _x, _y = x[:,i], y[:,j]
+                # TE(x->y)
+                _en, _pdf = ic.tf_get_TE(_x, _y, self.seq_len)
+                te_term += _en
+        return te_term
+
 
     def loss(self, inputs, outputs, length, mode):
         # if mode==True: TE(y->x)
@@ -218,6 +242,7 @@ class CNN_Simulator:
                 tf.summary.scalar('lyapunov'+str(i), lyapunov[i])
 
         with tf.name_scope('TE-Loss'):
+            '''
             ic = probability.InfoContent()
 
             # The empty constant Tensor to get unit-num.
@@ -227,10 +252,17 @@ class CNN_Simulator:
             x, x_units_, y, y_units_ = tf.cond(mode,
                     lambda:(outputs, output_units_, inputs, input_units_),
                     lambda:(inputs, input_units_, outputs, output_units_))
+            '''
+            '''
+            x, x_units, y, y_units = tf.cond(mode,
+                    lambda:(outputs, int(outputs.get_shape()[1]), inputs, input_units_),
+                    lambda:(inputs, int(inputs.get_shape()[1]), outputs, output_units_))
 
-            x_units = int(x_units_.get_shape()[0])
-            y_units = int(y_units_.get_shape()[0])
-            print('x_units: {}, y_units: {}'.format(x_units, y_units))
+            print('x_units: ', x_units)
+
+
+            # x_units = int(x_units_.get_shape()[0])
+            # y_units = int(y_units_.get_shape()[0])
 
             # x_units, y_units = 1,1
 
@@ -245,22 +277,45 @@ class CNN_Simulator:
                 entropy.append(_entropy)
                 tf.summary.scalar('entropy{}'.format(i), entropy[i])
 
-            te_term = tf.reduce_mean(entropy)
+            te_term = 0
+            for i in range(x_units):
+                for j in range(y_units):
+                    _x, _y = x[:,j], y[:,i]
+                    # TE(y->x)
+                    _en, _pdf = ic.tf_get_TE(_x, _y, self.seq_len)
+                    te_term += _en
+            '''
+
+            te_term = tf.cond(mode, lambda:self.x_output(outputs, inputs), lambda:self.x_input(inputs, outputs))
+            tf.summary.scalar('entropy', te_term)
+
 
             # 出力値同士の差別化項
             # diff_term = tf.reduce_sum(tf.log(tf.abs(tf.abs(outputs[:,0])-tf.abs(outputs[:,1]))+1e-10))
 
             # 差別化するのは人間をモデル化する上でおかしい
             # 同じパターンがこないようにしたい=飽きと解釈できる
-            # ただし、絶対座標には適用できないだろう
+            # ただし、絶対座標にはそのままは適用できない
             # diff_term = tf.log(tf.var(outputs[:,0])+1e-10)+tf.log(tf.var(outputs[:,1])+1e-10)
-            _, var_x = tf.nn.moments(outputs[:,0], [0])
-            _, var_y = tf.nn.moments(outputs[:,1], [0])
-            diff_term = tf.log(var_x+1e-10)+tf.log(var_y+1e-10)
+            # _, var_x = tf.nn.moments(outputs[:,0], [0])
+            # _, var_y = tf.nn.moments(outputs[:,1], [0])
+            # diff_term = tf.log(var_x+1e-10)+tf.log(var_y+1e-10)
 
+            # theta = tf.atan((outputs[:,1][1:]-outputs[:,1][:-1])/tf.abs(outputs[:,0][1:]-outputs[:,0][:-1])+1e-10)
+            theta = tf.angle(tf.complex(outputs[:,1][1:]-outputs[:,1][:-1], outputs[:,0][1:]-outputs[:,0][:-1]))
+            ccf = []
+            for i in range(length-1):
+                _ccf = 0
+                for j in range(length-1-i):
+                    _ccf += theta[j] * theta[j+i]
+                ccf.append(_ccf)
 
-            return -te_term, te_term, diff_term, _pdf
-            # return -(te_term+diff_term), te_term, diff_term, _pdf
+            # diff_term = tf.log(1/tf.abs(tf.reduce_sum(ccf)) + 1e-10)
+            diff_term = tf.log(1/tf.reduce_max(ccf) + 1e-10)
+            tf.summary.scalar('CCF: ', diff_term)
+
+            # return -te_term, te_term, diff_term
+            return -(te_term+diff_term), te_term, diff_term
 
         '''
         with tf.name_scope('loss_lyapunov'):
@@ -328,10 +383,10 @@ class CNN_Simulator:
         norm_in, inputs, outputs, params = self.inference(self.seq_len)
         Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
 
-        error, te_term, diff_term, pdf = self.loss(norm_in, outputs, self.seq_len, Mode)
+        error, te_term, diff_term = self.loss(norm_in, outputs, self.seq_len, Mode)
         tf.summary.scalar('error', error)
-        tf.summary.scalar('te_term', te_term)
-        tf.summary.scalar('diff_term', diff_term)
+        # tf.summary.scalar('te_term', te_term)
+        # tf.summary.scalar('diff_term', diff_term)
         train_step, grad = self.train(error, [Wi, bi, Wo, bo])
 
         merged = tf.summary.merge_all()
@@ -347,7 +402,7 @@ class CNN_Simulator:
 
         # fig, ax = plt.subplots(1, 1)
         # fig = plt.figure(figsize=(10,6))
-        fig, (axL, axR) = plt.subplots(ncols=2, figsize=(12,6))
+        # fig, (axL, axR) = plt.subplots(ncols=2, figsize=(12,6))
 
         event = draw.Event(draw.Event.USER_MODE)
         re_plot = my.RecurrencePlot()
@@ -364,7 +419,7 @@ class CNN_Simulator:
         # outB = np.random.rand(self.seq_len, 2)
         outB = []
         for i in range(int(np.ceil(self.seq_len/3))):
-            r = np.random.rand(1,2).tolist()
+            r = np.random.rand(1,self.input_units).tolist()
             if i == np.ceil(self.seq_len/3)-1 and self.seq_len%3 != 0:
                 outB.extend(r*(self.seq_len%3))
             else:
@@ -379,6 +434,7 @@ class CNN_Simulator:
         epoch = 0
         proctime = 1
         t_entropy = deque([])
+        switch_prob = []
         
         f = open(self.act_logfile, mode='w')
 
@@ -420,6 +476,10 @@ class CNN_Simulator:
                     else:
                         outA.extend(r*3)
                 outA = np.array(outA)
+                # 移動平均
+                for i in range(len(outA)-1):
+                    outA[i+1,:] = (outA[i,:]+outA[i+1,:])/2
+                    pass
 
             network_proctime_en = datetime.datetime.now()
             proctime = (network_proctime_en-network_proctime_st).total_seconds()
@@ -430,8 +490,8 @@ class CNN_Simulator:
             for i in range(self.seq_len):
                 event.set_movement(np.array(outA[i]), mag)
 
-                diff, is_drawing = event.get_pos()
-                outB.append(diff)
+                diff, diff_pos, is_drawing = event.get_diff()
+                outB.append(diff+diff_pos)
 
                 # ADJUST
                 time.sleep(0.05)
@@ -445,7 +505,7 @@ class CNN_Simulator:
                 print('INPUT=RANDOM')
                 outB = []
                 for i in range(int(np.ceil(self.seq_len/3))):
-                    r = np.random.rand(1,2).tolist()
+                    r = np.random.rand(1,self.input_units).tolist()
                     if i == np.ceil(self.seq_len/3)-1 and self.seq_len%3 != 0:
                         outB.extend(r*(self.seq_len%3))
                     else:
@@ -477,19 +537,21 @@ class CNN_Simulator:
 
             if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 t_entropy.append(_te_term)
-                if len(t_entropy) > 30:
+                if len(t_entropy) > self.seq_len:
                     t_entropy.popleft()
 
-                switch_prob = 1/(abs(np.mean(np.diff(t_entropy)))+1)
-                print('TE-diff: ', np.diff(t_entropy))
-                print('Pr(switch) = ', switch_prob)
+                if len(t_entropy) == self.seq_len:
+                    switch_prob.append(1/(abs(np.mean(np.diff(t_entropy)))+1))
+                    print('TE-diff: ', np.diff(t_entropy))
+                    print('Pr(switch) = ', switch_prob[-1])
 
-                if len(t_entropy) == 30 and switch_prob > (np.random.rand()*0.5)+0.5:
-                    print('[Change Mode]')
-                    t_entropy = deque([])
-                    modeA = not modeA
-                    mode_switch.append(epoch)
-                    event.set_system_mode(modeA)
+
+                    if switch_prob[-1] > 0.9 or (switch_prob[-1] > 0 and switch_prob[-1] < -0.1):
+                        print('[Change Mode]: ', switch_prob[-1])
+                        t_entropy = deque([])
+                        modeA = not modeA
+                        mode_switch.append(epoch)
+                        event.set_system_mode(modeA)
                 
 
             '''
@@ -535,6 +597,10 @@ class CNN_Simulator:
         f.close()
         mode_switch = np.unique(mode_switch) * self.seq_len
         print('mode_switch: ', mode_switch)
+
+        plt.figure(figsize=(10,6))
+        plt.plot(switch_prob)
+        plt.show()
 
 
         '''
