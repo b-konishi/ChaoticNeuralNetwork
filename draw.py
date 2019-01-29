@@ -14,8 +14,8 @@ import read_joy as joycon
 import pygame
 
 class Event:
-    DEBUG = False
     DEBUG = True
+    DEBUG = False
 
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
@@ -29,7 +29,7 @@ class Event:
     CIRCLE_D = 30
     LINE_WIDTH = 2
 
-    INTERACTIVE_TIME = 2*60
+    INTERACTIVE_TIME = 3*60
     TESTING_TIME = 15
 
     DIFF = 0.04
@@ -324,10 +324,15 @@ class Event:
         while not self.ARROW_KEYCODE['Enter'] in self.history:
             pass
 
+
         self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text', fill='white')
         self.frame.update()
         time.sleep(1)
         self.canvas.delete('text')
+
+        # Launch the system
+        self.startup = True
+
         self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='2', font=('FixedSys',36), tags='text', fill='white')
         self.frame.update()
         time.sleep(1)
@@ -349,8 +354,6 @@ class Event:
         writer.writerow(['time[ms]','x1','y1','x2','y2'])
         start_time = datetime.datetime.now()
 
-        # Launch the system
-        self.startup = True
         
         _t = 0
         while True:

@@ -70,7 +70,7 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 20
+        self.seq_len = 10
         self.epoch_size = 100
 
         self.input_units = 4
@@ -301,8 +301,9 @@ class CNN_Simulator:
             # _, var_y = tf.nn.moments(outputs[:,1], [0])
             # diff_term = tf.log(var_x+1e-10)+tf.log(var_y+1e-10)
 
-            # theta = tf.atan((outputs[:,1][1:]-outputs[:,1][:-1])/tf.abs(outputs[:,0][1:]-outputs[:,0][:-1])+1e-10)
-            theta = tf.angle(tf.complex(outputs[:,1][1:]-outputs[:,1][:-1], outputs[:,0][1:]-outputs[:,0][:-1]))
+            # theta = tf.angle(tf.complex(outputs[:,1][1:]-outputs[:,1][:-1], outputs[:,0][1:]-outputs[:,0][:-1]))
+            _s = tf.sign(outputs[:,0][1:]-outputs[:,0][:-1])
+            theta = tf.atan((outputs[:,1][1:]-outputs[:,1][:-1])/(outputs[:,0][1:]-outputs[:,0][:-1] + _s*1e-10))
             ccf = []
             for i in range(length-1):
                 _ccf = 0
@@ -310,8 +311,8 @@ class CNN_Simulator:
                     _ccf += theta[j] * theta[j+i]
                 ccf.append(_ccf)
 
-            # diff_term = tf.log(1/tf.abs(tf.reduce_sum(ccf)) + 1e-10)
-            diff_term = tf.log(1/tf.reduce_max(ccf) + 1e-10)
+            diff_term = tf.pow(tf.reduce_max(ccf), 2)
+            # diff_term = 1/(tf.reduce_max(ccf)+1e-10)**2 
             tf.summary.scalar('CCF: ', diff_term)
 
             # return -te_term, te_term, diff_term
@@ -537,16 +538,17 @@ class CNN_Simulator:
 
             if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 t_entropy.append(_te_term)
-                if len(t_entropy) > self.seq_len:
+                if len(t_entropy) > 20:
                     t_entropy.popleft()
 
-                if len(t_entropy) == self.seq_len:
-                    switch_prob.append(1/(abs(np.mean(np.diff(t_entropy)))+1))
+                if len(t_entropy) == 20:
+                    _s = np.mean(np.diff(t_entropy))
+                    switch_prob.append(np.sign(_s) * 1/(abs(_s)+1))
                     print('TE-diff: ', np.diff(t_entropy))
                     print('Pr(switch) = ', switch_prob[-1])
 
 
-                    if switch_prob[-1] > 0.9 or (switch_prob[-1] > 0 and switch_prob[-1] < -0.1):
+                    if switch_prob[-1]>0.9 or (np.sign(_s)==-1 and switch_prob[-1]<-0.1):
                         print('[Change Mode]: ', switch_prob[-1])
                         t_entropy = deque([])
                         modeA = not modeA
@@ -597,6 +599,8 @@ class CNN_Simulator:
         f.close()
         mode_switch = np.unique(mode_switch) * self.seq_len
         print('mode_switch: ', mode_switch)
+
+        print('switch_prob: ', switch_prob)
 
         plt.figure(figsize=(10,6))
         plt.plot(switch_prob)
@@ -690,7 +694,7 @@ class CNN_Simulator:
 
 
 if __name__ == "__main__":
-    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.CHAOTIC_BEHAVIOR)
+    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.RANDOM_BEHAVIOR)
     # simulator.learning1()
     # simulator.robot_robot_interaction()
     simulator.human_agent_interaction()
