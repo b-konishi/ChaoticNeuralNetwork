@@ -396,31 +396,42 @@ class Event:
                     # self.x2_pos = self.CANVAS_SIZE-self.CIRCLE_D
                     # dx2_ = self.x2_pos-self.dx2
                     # self.x2_pos = 0
-                    self.x2_pos -= dx2_*2
+
+                    # self.x2_pos -= dx2_*2
+                    self.x2_pos -= dx2_
                     # pre_pos2[0] = self.x2_pos
                     dx2_ = -dx2_
+                    dx2_ = 0
                 elif self.x2_pos > self.canvas_w-self.CIRCLE_D:
                     # dx2_ = 0 - (self.x2_pos-dx2_)
                     # self.x2_pos = 0
                     # dx2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.x2_pos-dx2_)
+
                     # self.x2_pos = self.CANVAS_SIZE-self.CIRCLE_D
-                    self.x2_pos -= dx2_*2
+                    # self.x2_pos -= dx2_*2
+                    self.x2_pos -= dx2_
                     # pre_pos2[0] = self.x2_pos
                     dx2_ = -dx2_
+                    dx2_ = 0
 
                 if self.y2_pos < 0:
                     # dy2_ = self.CANVAS_SIZE-self.CIRCLE_D - (self.y2_pos-dy2_)
                     # self.y2_pos = self.CANVAS_SIZE-self.CIRCLE_D
-                    self.y2_pos -= dy2_*2
+
+                    # self.y2_pos -= dy2_*2
+                    self.y2_pos -= dy2_
                     # pre_pos2[1] = self.y2_pos
                     dy2_ = -dy2_
+                    dy2_ = 0
                 elif self.y2_pos > self.canvas_h-self.CIRCLE_D:
                     print('posy2: ', self.y2_pos)
                     # dy2_ = 0 - (self.y2_pos-dy2_)
                     # self.y2_pos = 0
-                    self.y2_pos -= dy2_*2
+                    # self.y2_pos -= dy2_*2
+                    self.y2_pos -= dy2_
                     # pre_pos2[1] = self.y2_pos
                     dy2_ = -dy2_
+                    dy2_ = 0
 
                 self.canvas.move(circle2, dx2_, dy2_)
                 self.frame.update()

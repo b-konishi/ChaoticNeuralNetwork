@@ -14,6 +14,7 @@ import threading
 import warnings
 import datetime
 from collections import deque
+from scipy.interpolate import interp1d
 
 # Tensorflow
 import tensorflow as tf
@@ -70,7 +71,7 @@ class CNN_Simulator:
         self.is_plot = True
 
         # sequence-length at once
-        self.seq_len = 10
+        self.seq_len = 20
         self.epoch_size = 100
 
         self.input_units = 4
@@ -302,24 +303,48 @@ class CNN_Simulator:
             # diff_term = tf.log(var_x+1e-10)+tf.log(var_y+1e-10)
 
             # theta = tf.angle(tf.complex(outputs[:,1][1:]-outputs[:,1][:-1], outputs[:,0][1:]-outputs[:,0][:-1]))
-            _s = tf.sign(outputs[:,0][1:]-outputs[:,0][:-1])
-            theta = tf.atan((outputs[:,1][1:]-outputs[:,1][:-1])/(outputs[:,0][1:]-outputs[:,0][:-1] + _s*1e-10))
-            ccf = []
-            for i in range(length-1):
-                _ccf = 0
-                _total = 0
-                for j in range(length-1-i):
-                    _ccf += theta[j] * theta[j+i]
-                    _total += theta[j] * theta[j]
-                ccf.append(_ccf/_total)
+            theta = tf.atan((outputs[:,1][1:]-outputs[:,1][:-1])/(outputs[:,0][1:]-outputs[:,0][:-1]+1e-10))
+            # theta = tf.atan((inputs[:,1][1:]-inputs[:,1][:-1])/(inputs[:,0][1:]-inputs[:,0][:-1]+1e-10))
+            '''
+            # theta = (theta-tf.reduce_min(theta)) / (tf.reduce_max(theta)-tf.reduce_min(theta))
+            cor = []
+            N = int((length-1)/2)
+            for i in range(N):
+                _cor = 0
+                for j in range(N):
+                    _cor += theta[j] * theta[j+i]
+                cor.append(_cor)
 
-            diff_term = tf.tan(tf.nn.relu(tf.reduce_max(ccf))+ np.pi/2-1-1e-10)
+            cor0 = cor[0]
+            if cor[0] != 0:
+                for i in range(N):
+                    cor[i] = cor[i]/cor0
+
+            # _a = list(np.array(cor[1:])-1 + np.pi/2 - 1e-10)
+            # diff_term = tf.reduce_sum(tf.tan(tf.nn.relu(_a)))
+            _a = list(-1 * np.array(cor[1:]) +1e-10)
+            # diff_term = tf.reduce_mean(tf.log(_a+tf.reduce_max(cor)))
+            # diff_term2 = (tf.reduce_max(cor))
+            # diff_term = tf.reduce_sum(tf.tan(tf.nn.relu(cor)-tf.reduce_max(cor)+np.pi/2-1e-10))
+            '''
+            cor = tf.contrib.distributions.auto_correlation(theta)
+            _, var = tf.nn.moments(cor[1:]-cor[:-1], [0])
+            var = tf.cond(tf.is_nan(var), lambda:0., lambda:var)
+            # diff_term = tf.log(var**3+1e-100)
+            # y=xの直線の時の分散は0.20
+            var_th = 0.20
+            logy0 = 1-var_th*2
+            diff_term = -tf.log(var+logy0) * te_term/tf.log(var_th+logy0)
+            
+            
+            diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             # diff_term = 1/(tf.reduce_max(ccf)+1e-10)**2 
-            tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
-            tf.summary.scalar('error_CCF: ', diff_term)
+            # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
+            tf.summary.scalar('error_CCF', diff_term)
+            tf.summary.scalar('error_CCF2', tf.reduce_mean(theta)*180/np.pi)
 
             # return -te_term, te_term, diff_term
-            return -(te_term-diff_term), te_term, diff_term
+            return -(te_term+diff_term), te_term, diff_term, theta
 
         '''
         with tf.name_scope('loss_lyapunov'):
@@ -397,7 +422,7 @@ class CNN_Simulator:
         norm_in, inputs, outputs, params = self.inference(self.seq_len)
         Wi, bi, Wo, bo = params['Wi'], params['bi'], params['Wo'], params['bo']
 
-        error, te_term, diff_term = self.loss(norm_in, outputs, self.seq_len, Mode)
+        error, te_term, diff_term, param = self.loss(norm_in, outputs, self.seq_len, Mode)
         tf.summary.scalar('error', error)
         # tf.summary.scalar('te_term', te_term)
         # tf.summary.scalar('diff_term', diff_term)
@@ -470,17 +495,21 @@ class CNN_Simulator:
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
                 outA, _te_term, _diff_term, gradientsA = sess.run([outputs, te_term, diff_term, grad], feed_dict=feed_dictA)
+                p = sess.run(param, feed_dict=feed_dictA)
+                print('param: ', np.mean(p)*180/np.pi)
 
                 if epoch % 1 == 0:
                     for (g, v) in gradientsA:
                         print('gradA: ', g[0][0:5])
-                        print('te_term: ', _te_term)
-                        print('diff_term: ', _diff_term)
+                    print('te_term: ', _te_term)
+                    print('diff_term: ', _diff_term)
+                    print('outA: ', outA)
 
                 summaryA, _ = sess.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
+                '''
                 # outA = np.random.rand(self.seq_len, self.output_units)-0.5
                 outA = []
                 for i in range(int(np.ceil(self.seq_len/3))):
@@ -490,6 +519,24 @@ class CNN_Simulator:
                     else:
                         outA.extend(r*3)
                 outA = np.array(outA)
+                '''
+
+                N = int(self.seq_len/5)
+                x = np.linspace(0,1,num=N)
+                r = np.random.rand(N, self.output_units)-0.5
+                if epoch != 0:
+                    r[0,:] = past_outA[-1]
+
+                xnew = np.linspace(0,1,num=self.seq_len)
+                f_cs = []
+                outA = []
+                for i in range(self.output_units):
+                    outA.append(interp1d(x, r[:,i], kind='cubic')(xnew))
+                outA = np.array(outA).T
+
+
+
+
             # 移動平均
             '''
             p = len(outA)
@@ -504,21 +551,32 @@ class CNN_Simulator:
                 for j in np.array(range(len(p)-1))+1:
                     b = self.basis_func(u, j, n, t[i])
                     S[i,:] = S[i,:] + P[j,:]*b
+
             '''
+            # 前回の出力からの移動平均
+            past_size = 3
             size = 3
+            if epoch != 0:
+                _out = outA[0,:]
+                for i in range(size-1):
+                    _out += past_outA[-(i+1),:]
+                outA[0,:] = _out/past_size
+            '''
+
             for i in range(len(outA)-(size-1)):
                 _out = 0
                 for j in range(size):
                     _out += outA[i+j,:]
-                outA[i+(size-1),:] = _out/(size-1)
-                pass
+                outA[i+(size-1),:] = _out/size
+            '''
+
 
             network_proctime_en = datetime.datetime.now()
             proctime = (network_proctime_en-network_proctime_st).total_seconds()
             print('proctime:{}s '.format(proctime))
 
             outB = []
-            mag = 20
+            mag = 30
             for i in range(self.seq_len):
                 event.set_movement(np.array(outA[i]), mag)
 
@@ -622,6 +680,7 @@ class CNN_Simulator:
             # print('[A] value={}'.format(outA))
             # print('[B] value={}'.format(outB))
 
+            past_outA = outA
             epoch += 1
 
         # print('outA: ', np.array(trajectoryA))
