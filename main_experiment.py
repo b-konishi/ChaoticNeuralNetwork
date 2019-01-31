@@ -211,7 +211,7 @@ class CNN_Simulator:
     def x_input(self, x, y):
         ic = probability.InfoContent()
         te_term = 0
-        for i in range(self.input_units):
+        for i in range(self.output_units):
             for j in range(self.output_units):
                 _x, _y = x[:,i], y[:,j]
                 # TE(y->x)
@@ -223,7 +223,7 @@ class CNN_Simulator:
         ic = probability.InfoContent()
         te_term = 0
         for i in range(self.output_units):
-            for j in range(self.input_units):
+            for j in range(self.output_units):
                 _x, _y = x[:,i], y[:,j]
                 # TE(x->y)
                 _en, _pdf = ic.tf_get_TE(_x, _y, self.seq_len)
@@ -307,16 +307,19 @@ class CNN_Simulator:
             ccf = []
             for i in range(length-1):
                 _ccf = 0
+                _total = 0
                 for j in range(length-1-i):
                     _ccf += theta[j] * theta[j+i]
-                ccf.append(_ccf)
+                    _total += theta[j] * theta[j]
+                ccf.append(_ccf/_total)
 
-            diff_term = tf.pow(tf.reduce_max(ccf), 2)
+            diff_term = tf.tan(tf.nn.relu(tf.reduce_max(ccf))+ np.pi/2-1-1e-10)
             # diff_term = 1/(tf.reduce_max(ccf)+1e-10)**2 
-            tf.summary.scalar('CCF: ', diff_term)
+            tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
+            tf.summary.scalar('error_CCF: ', diff_term)
 
             # return -te_term, te_term, diff_term
-            return -(te_term+diff_term), te_term, diff_term
+            return -(te_term-diff_term), te_term, diff_term
 
         '''
         with tf.name_scope('loss_lyapunov'):
@@ -722,7 +725,7 @@ class CNN_Simulator:
 
 
 if __name__ == "__main__":
-    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.RANDOM_BEHAVIOR)
+    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.CHAOTIC_BEHAVIOR)
     # simulator.learning1()
     # simulator.robot_robot_interaction()
     simulator.human_agent_interaction()
