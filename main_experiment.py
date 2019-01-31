@@ -7,6 +7,7 @@ import probability
 import draw
 
 # Standard
+import sys
 import math
 import time
 import numpy as np
@@ -36,10 +37,7 @@ import GPyOpt
 
 class CNN_Simulator:
     MODEL_PATH = '../model/'
-    LOG_PATH = '../logdir'
     SOUND_PATH = '../music/'
-
-    act_logfile = '../log_act.txt'
 
     RANDOM_BEHAVIOR = 'RANDOM'
     CHAOTIC_BEHAVIOR = 'CHAOS'
@@ -53,6 +51,15 @@ class CNN_Simulator:
 
 
     def __init__(self, network_mode=TRAIN_MODE, behavior_mode=CHAOTIC_BEHAVIOR):
+        self.testee = '' if len(sys.argv)==1 else sys.argv[1]
+
+        if self.testee == '':
+            self.act_logfile = '../log_act.txt'
+            self.LOG_PATH = '../logdir'
+        else:
+            self.act_logfile = '../log_act_' + self.testee + '.txt'
+            self.LOG_PATH = '../logdir_' + self.testee
+
         self.network_mode = network_mode
 
         self.behavior_mode = behavior_mode
@@ -334,8 +341,8 @@ class CNN_Simulator:
             # y=xの直線の時の分散は0.20
             var_th = 0.20
             logy0 = 1-var_th*2
-            diff_term = -tf.log(var+logy0) * te_term/tf.log(var_th+logy0)
-            
+            # diff_term = -tf.log(var+logy0) * tf.abs(te_term)/tf.log(var_th+logy0)
+            diff_term = tf.log(1/var_th * tf.exp(-tf.abs(te_term)) * var + 1e-100)
             
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             # diff_term = 1/(tf.reduce_max(ccf)+1e-10)**2 
@@ -399,18 +406,6 @@ class CNN_Simulator:
             time.sleep(proctime/num)
             event.set_network_interval()
             
-    '''
-    def open_uniform_knot_vector(self, m, n):
-        ret = np.zeros([1,m])
-        for i in np.linspace()
-
-        return ret
-
-
-    def basis_func(self, u, j, n, t):
-    '''
-
-
 
     def human_agent_interaction(self):
         sess = tf.InteractiveSession()
@@ -430,12 +425,10 @@ class CNN_Simulator:
 
         merged = tf.summary.merge_all()
 
-        # Tensorboard logfile
-        self.LOG_PATHA = '../logdir'
 
-        if tf.gfile.Exists(self.LOG_PATHA):
-            tf.gfile.DeleteRecursively(self.LOG_PATHA)
-        writerA = tf.summary.FileWriter(self.LOG_PATHA, sess.graph)
+        if tf.gfile.Exists(self.LOG_PATH):
+            tf.gfile.DeleteRecursively(self.LOG_PATH)
+        writerA = tf.summary.FileWriter(self.LOG_PATH, sess.graph)
 
         sess.run(tf.global_variables_initializer())
 
@@ -443,7 +436,7 @@ class CNN_Simulator:
         # fig = plt.figure(figsize=(10,6))
         # fig, (axL, axR) = plt.subplots(ncols=2, figsize=(12,6))
 
-        event = draw.Event(draw.Event.USER_MODE)
+        event = draw.Event(draw.Event.USER_MODE, testee=self.testee)
         re_plot = my.RecurrencePlot()
 
         # True: Following, False: Creative
@@ -521,6 +514,7 @@ class CNN_Simulator:
                 outA = np.array(outA)
                 '''
 
+                # Using 3-dim spline function
                 N = int(self.seq_len/5)
                 x = np.linspace(0,1,num=N)
                 r = np.random.rand(N, self.output_units)-0.5
@@ -535,24 +529,6 @@ class CNN_Simulator:
                 outA = np.array(outA).T
 
 
-
-
-            # 移動平均
-            '''
-            p = len(outA)
-            n = 3
-            m = p + n + 1
-            u = self.open_uniform_knot_vector(m,n)
-            t = 0:0.01:u[-1]
-
-            S = np.zeros([len(t), 2])
-            S[1,:] = outA[1,:]
-            for i in np.array(range(len(t)-2))+2:
-                for j in np.array(range(len(p)-1))+1:
-                    b = self.basis_func(u, j, n, t[i])
-                    S[i,:] = S[i,:] + P[j,:]*b
-
-            '''
             # 前回の出力からの移動平均
             past_size = 3
             size = 3
@@ -693,7 +669,7 @@ class CNN_Simulator:
         print('switch_prob: ', switch_prob)
 
         plt.figure(figsize=(10,6))
-        plt.plot(switch_prob)
+        plt.plot(switch_prob, marker='.')
         plt.show()
 
 
@@ -785,6 +761,7 @@ class CNN_Simulator:
 
 if __name__ == "__main__":
     simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.CHAOTIC_BEHAVIOR)
+    # simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.RANDOM_BEHAVIOR)
     # simulator.learning1()
     # simulator.robot_robot_interaction()
     simulator.human_agent_interaction()

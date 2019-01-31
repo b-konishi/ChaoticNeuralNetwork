@@ -14,8 +14,8 @@ import read_joy as joycon
 import pygame
 
 class Event:
-    DEBUG = False
     DEBUG = True
+    DEBUG = False
 
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
@@ -45,7 +45,7 @@ class Event:
     # Experimental numeric value...
     ARROW_KEYCODE = {'Enter':36, 'Up':111, 'Down':116, 'Right':114, 'Left':113}
 
-    def __init__(self, mode=USER_MODE):
+    def __init__(self, mode=USER_MODE, testee=''):
         self.mode = mode
         self.system_mode = simulation.CNN_Simulator.IMITATION_MODE
 
@@ -68,8 +68,11 @@ class Event:
 
         self.TORUS = [False]*2
 
-        self.logfile = '../log.txt'
-        self.testee = 'a'
+        self.testee = testee
+        if self.testee == '':
+            self.logfile = '../log.txt'
+        else:
+            self.logfile = '../log_' + self.testee + '.txt'
 
         pygame.init()
         self.joy = joycon.Joycon()
@@ -349,9 +352,9 @@ class Event:
 
         f = open(self.logfile, mode='w')
         writer = csv.writer(f, lineterminator='\n')
-        writer.writerow(['testee1','W','H','CIRCLE_D'])
+        writer.writerow(['testee1','W','H','CIRCLE_D','1:user,2:system','0:ch,1:im'])
         writer.writerow([self.testee,self.canvas_w,self.canvas_h,self.CIRCLE_D])
-        writer.writerow(['time[ms]','x1','y1','x2','y2'])
+        writer.writerow(['time[ms]','mode','x1','y1','x2','y2','x1-x2','y1-y2'])
         start_time = datetime.datetime.now()
 
         
@@ -550,7 +553,7 @@ class Event:
             '''
 
             t = int((datetime.datetime.now()-start_time).total_seconds()*1000)
-            writer.writerow([t, self.x1_pos, self.y1_pos, self.x2_pos, self.y2_pos])
+            writer.writerow([t, int(self.system_mode), self.x1_pos, self.y1_pos, self.x2_pos, self.y2_pos, self.x1_pos-self.x2_pos, self.y1_pos-self.y2_pos])
             # self.canvas.delete('t_circle')
             if t/1000 > self.INTERACTIVE_TIME:
                 break
