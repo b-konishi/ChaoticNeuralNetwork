@@ -14,34 +14,40 @@ class Analysis:
         self.time, self.mode = [],[]
         self.x1, self.y1, self.x2, self.y2 = [],[],[],[]
         self.relx, self.rely = [],[]
+        self.prev_ver = False
 
         with open(filename, 'r') as f:
             reader = csv.reader(f)
             [next(reader) for _ in range(2)]
+            # Read an index
             index = next(reader)
+            if len(index) == 5:
+                self.prev_ver = True
             for d in reader:
                 d = np.array(d).astype(np.float32)
                 self.time.append(d[index.index('time[ms]')])
-                self.mode.append(d[index.index('mode')])
                 self.x1.append(d[index.index('x1')])
                 self.y1.append(d[index.index('y1')])
                 self.x2.append(d[index.index('x2')])
                 self.y2.append(d[index.index('y2')])
-                self.relx.append(d[index.index('x1-x2')])
-                self.rely.append(d[index.index('y1-y2')])
-                # print(np.array(d).astype(np.float32))
+                if not self.prev_ver:
+                    self.mode.append(d[index.index('mode')])
+                    self.relx.append(d[index.index('x1-x2')])
+                    self.rely.append(d[index.index('y1-y2')])
 
         self.time = np.array(self.time)
 
-        self.shaped_mode = self.make_cluster(self.time, self.mode)
 
         self.shaped_x1 = self.make_cluster(self.time, self.x1)
         self.shaped_x2 = self.make_cluster(self.time, self.x2)
         self.shaped_y1 = self.make_cluster(self.time, self.y1)
         self.shaped_y2 = self.make_cluster(self.time, self.y2)
 
-        self.shaped_relx = self.make_cluster(self.time, self.relx)
-        self.shaped_rely = self.make_cluster(self.time, self.rely)
+        if not self.prev_ver:
+            self.shaped_mode = self.make_cluster(self.time, self.mode)
+
+            self.shaped_relx = self.make_cluster(self.time, self.relx)
+            self.shaped_rely = self.make_cluster(self.time, self.rely)
 
         # 差分データを取得
         self.shaped_dx1 = np.diff(self.shaped_x1)
@@ -49,53 +55,45 @@ class Analysis:
         self.shaped_dy1 = np.diff(self.shaped_y1)
         self.shaped_dy2 = np.diff(self.shaped_y2)
 
+        '''
         self.shaped_dx1 = self.normalize(self.shaped_dx1)
         self.shaped_dx2 = self.normalize(self.shaped_dx2)
         self.shaped_dy1 = self.normalize(self.shaped_dy1)
         self.shaped_dy2 = self.normalize(self.shaped_dy2)
+        '''
 
         self.shaped_d1, self.shaped_d2 = [],[] 
         for ((x1,y1),(x2,y2)) in zip(zip(self.shaped_dx1,self.shaped_dy1), zip(self.shaped_dx2,self.shaped_dy2)):
             self.shaped_d1.append(np.linalg.norm([x1,y1],2))
             self.shaped_d2.append(np.linalg.norm([x2,y2],2))
 
-        self.shaped_rel = []
-        for (x,y) in zip(self.shaped_relx, self.shaped_rely):
-            self.shaped_rel.append(np.linalg.norm([x,y],2))
+        if not self.prev_ver:
+            self.shaped_rel = []
+            for (x,y) in zip(self.shaped_relx, self.shaped_rely):
+                self.shaped_rel.append(np.linalg.norm([x,y],2))
 
-        ic = probability.InfoContent()
-        delayed_tau1, mic1 = ic.get_tau(self.shaped_d1, max_tau=20)
-        delayed_tau2, mic2 = ic.get_tau(self.shaped_d2, max_tau=20)
-        print('tau1: ', delayed_tau1)
-        print('tau2: ', delayed_tau2)
+        ##### Delayed OUT DATA #####
+        delayed_out1, delayed_out2 = self.delay_coord_analysis(self.shaped_dy1, self.shaped_dy2)
 
-        fig, (ax_mic, ax_delay, ax_traj) = plt.subplots(ncols=3, figsize=(18,6))
-        ax_mic.plot(range(1,len(mic1)+1), mic1, c='black')
-        ax_mic.set_title('Mutual Information Content(tau:{})'.format(delayed_tau1))
-        ax_mic.set_xticks(np.arange(0, 20+1, 1))
-        ax_mic.grid()
 
-        delayed_dim = 3
-        delayed_out1, delayed_out2 = [], []
-        for i in reversed(range(delayed_dim)):
-            delayed_out1.append(np.roll(self.shaped_dy1, -i*delayed_tau1)[:len(self.shaped_dy1)-delayed_tau1])
-            delayed_out2.append(np.roll(self.shaped_dy2, -i*delayed_tau2)[:len(self.shaped_dy2)-delayed_tau2])
-
-        delayed_out1 = np.array(delayed_out1).T
-        delayed_out2 = np.array(delayed_out2).T
-        # ax_delay = Axes3D(fig)
-        ax_delay.set_title('delayed-out')
-        ax_delay.plot(delayed_out1[:,0], delayed_out1[:,1], '.-', lw=0.1)
-
-        ax_traj.set_title('Trajectory')
-        ax_traj.plot(self.x1[::100], self.y1[::100], '.-', lw=0.1)
+        ##### Trajectory Plot #####
+        fig, (ax_traj1,ax_traj2) = plt.subplots(ncols=2, figsize=(12,6))
+        # ax_traj1.set_title('Trajectory(red:Human,Green:System)')
+        # ax_traj.plot(self.x1[::100], self.y1[::100], '.-', lw=0.1)
+        ax_traj1.set_title('Trajectory for Human')
+        ax_traj1.plot(self.x1[::100], self.y1[::100], c='red', lw=1)
+        ax_traj2.set_title('Trajectory for System')
+        ax_traj2.plot(self.x2[::100], self.y2[::100], c='green', lw=1)
             
 
+        ##### Recurrence Plot #####
         rp_plot = my.RecurrencePlot()
 
         fig, (ax_rp1,ax_rp2) = plt.subplots(ncols=2, figsize=(24,12))
-        rp_plot.plot(ax_rp1, delayed_out1[::2,:], eps=0.5)
-        rp_plot.plot(ax_rp2, delayed_out2[::2,:], eps=0.5)
+        ax_rp1.set_title('RP for Human')
+        rp_plot.plot(ax_rp1, delayed_out1[::1,:], eps=0.5)
+        ax_rp2.set_title('RP for System')
+        rp_plot.plot(ax_rp2, delayed_out2[::1,:], eps=0.5)
 
         
         te_2to1, te_1to2 = [], []
@@ -103,6 +101,7 @@ class Analysis:
         te_diff_rand = []
         N = 60
 
+        ic = probability.InfoContent()
         r1 = np.random.rand(len(self.shaped_dx1))
         r2 = np.random.rand(len(self.shaped_dx1))
         for i in range(N, len(self.shaped_dx1)):
@@ -148,12 +147,13 @@ class Analysis:
         # ax2.plot(te_diff_rand, c='b', lw=0.7)
 
 
-        fig4, (ax_rel, ax_mode) = plt.subplots(ncols=2, figsize=(12,6))
-        # print(te_2to1, te_1to2)
-        ax_rel.set_title('Relation')
-        ax_rel.plot(self.shaped_rel, c='r', lw=1)
-        ax_mode.set_title('Mode')
-        ax_mode.plot(self.shaped_mode, c='r', lw=1)
+        if not self.prev_ver:
+            fig4, (ax_rel, ax_mode) = plt.subplots(ncols=2, figsize=(12,6))
+            # print(te_2to1, te_1to2)
+            ax_rel.set_title('Relation(Human-System)')
+            ax_rel.plot(self.shaped_rel, c='r', lw=1)
+            ax_mode.set_title('Mode')
+            ax_mode.plot(self.shaped_mode, c='r', lw=1)
 
 
 
@@ -161,6 +161,34 @@ class Analysis:
         
         
         # print(self.lyapunov(self.time, [self.shaped_dx1, self.shaped_dy1]))
+
+    def delay_coord_analysis(self, data1, data2):
+        ic = probability.InfoContent()
+        delayed_tau1, mic1 = ic.get_tau(data1, max_tau=20)
+        delayed_tau2, mic2 = ic.get_tau(data2, max_tau=20)
+        print('tau1: ', delayed_tau1)
+        print('tau2: ', delayed_tau2)
+
+        fig, (ax_mic, ax_delay) = plt.subplots(ncols=2, figsize=(12,6))
+        ax_mic.set_title('Mutual Information Content(tau:{},{})'.format(delayed_tau1,delayed_tau2))
+        ax_mic.plot(range(1,len(mic1)+1), mic1, c='red')
+        ax_mic.plot(range(1,len(mic2)+1), mic2, c='green')
+        ax_mic.set_xticks(np.arange(0, 20+1, 1))
+        ax_mic.grid()
+
+        delayed_dim = 3
+        delayed_out1, delayed_out2 = [], []
+        for i in reversed(range(delayed_dim)):
+            delayed_out1.append(np.roll(data1, -i*delayed_tau1)[:len(data1)-delayed_tau1])
+            delayed_out2.append(np.roll(data2, -i*delayed_tau2)[:len(data2)-delayed_tau2])
+
+        delayed_out1 = np.array(delayed_out1).T
+        delayed_out2 = np.array(delayed_out2).T
+        # ax_delay = Axes3D(fig)
+        ax_delay.set_title('delayed-out')
+        ax_delay.plot(delayed_out1[:,0], delayed_out1[:,1], '.-', lw=0.1)
+
+        return delayed_out1, delayed_out2
 
     def make_cluster(self, time, data):
 

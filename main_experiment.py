@@ -342,7 +342,9 @@ class CNN_Simulator:
             var_th = 0.20
             logy0 = 1-var_th*2
             # diff_term = -tf.log(var+logy0) * tf.abs(te_term)/tf.log(var_th+logy0)
-            diff_term = tf.log(1/var_th * tf.exp(-tf.abs(te_term)) * var + 1e-100)
+            diff_term = tf.log(1/var_th * tf.exp(te_term) * var + 1e-100)
+            # diff_term = -var*tf.abs(te_term)/0.2
+            # diff_term = tf.log(10/3 * )
             
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             # diff_term = 1/(tf.reduce_max(ccf)+1e-10)**2 
@@ -526,6 +528,7 @@ class CNN_Simulator:
                 outA = []
                 for i in range(self.output_units):
                     outA.append(interp1d(x, r[:,i], kind='cubic')(xnew))
+                print(outA)
                 outA = np.array(outA).T
 
 

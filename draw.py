@@ -14,8 +14,8 @@ import read_joy as joycon
 import pygame
 
 class Event:
-    DEBUG = True
     DEBUG = False
+    DEBUG = True
 
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
@@ -89,14 +89,20 @@ class Event:
 
     def animation(self):
         self.frame = tkinter.Tk()
-        self.frame.attributes('-fullscreen', True)
+
         self.frame.title("Title")
         self.frame.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.frame.focus_set()
         self.frame.config(cursor='none')
 
-        self.canvas_w = self.frame.winfo_screenwidth() - self.CANVAS_MARGIN*2
-        self.canvas_h = self.frame.winfo_screenheight() - self.CANVAS_MARGIN*2
+        if not self.DEBUG:
+            self.frame.attributes('-fullscreen', True)
+            self.canvas_w = self.frame.winfo_screenwidth() - self.CANVAS_MARGIN*2
+            self.canvas_h = self.frame.winfo_screenheight() - self.CANVAS_MARGIN*2
+        else:
+            self.canvas_w = self.frame.winfo_screenwidth()/2 - self.CANVAS_MARGIN*2
+            self.canvas_h = self.frame.winfo_screenheight()/2 - self.CANVAS_MARGIN*2
+            self.frame.geometry(str(int(self.canvas_w)+self.CANVAS_MARGIN*2)+'x'+str(int(self.canvas_h)+self.CANVAS_MARGIN*2))
 
         ################ DELETE ###################
         '''
