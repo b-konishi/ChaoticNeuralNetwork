@@ -77,7 +77,7 @@ class InfoContent:
 
         if tau is None:
             print('[Warning] tau is None.')
-            tau = 0
+            tau = max_tau
 
         return tau, mic
 

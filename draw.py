@@ -29,7 +29,7 @@ class Event:
     CIRCLE_D = 30
     LINE_WIDTH = 2
 
-    INTERACTIVE_TIME = 3*60
+    INTERACTIVE_TIME = 5*60
     TESTING_TIME = 15
 
     DIFF = 0.04
@@ -95,7 +95,7 @@ class Event:
         self.frame.focus_set()
         self.frame.config(cursor='none')
 
-        if not self.DEBUG:
+        if not self.DEBUG or self.DEBUG:
             self.frame.attributes('-fullscreen', True)
             self.canvas_w = self.frame.winfo_screenwidth() - self.CANVAS_MARGIN*2
             self.canvas_h = self.frame.winfo_screenheight() - self.CANVAS_MARGIN*2

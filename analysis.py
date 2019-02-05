@@ -62,6 +62,8 @@ class Analysis:
         self.shaped_dy2 = self.normalize(self.shaped_dy2)
         '''
 
+        # self.shaped_dx1 = [i for i in self.shaped_dx1 if not i==0]
+
         self.shaped_d1, self.shaped_d2 = [],[] 
         for ((x1,y1),(x2,y2)) in zip(zip(self.shaped_dx1,self.shaped_dy1), zip(self.shaped_dx2,self.shaped_dy2)):
             self.shaped_d1.append(np.linalg.norm([x1,y1],2))
@@ -73,8 +75,7 @@ class Analysis:
                 self.shaped_rel.append(np.linalg.norm([x,y],2))
 
         ##### Delayed OUT DATA #####
-        delayed_out1, delayed_out2 = self.delay_coord_analysis(self.shaped_dy1, self.shaped_dy2)
-
+        delayed_out1, delayed_out2 = self.delay_coord_analysis(self.shaped_dx1, self.shaped_dx2)
 
         ##### Trajectory Plot #####
         fig, (ax_traj1,ax_traj2) = plt.subplots(ncols=2, figsize=(12,6))
@@ -91,9 +92,9 @@ class Analysis:
 
         fig, (ax_rp1,ax_rp2) = plt.subplots(ncols=2, figsize=(24,12))
         ax_rp1.set_title('RP for Human')
-        rp_plot.plot(ax_rp1, delayed_out1[::1,:], eps=0.5)
+        rp_plot.plot(ax_rp1, delayed_out1[::2,:], eps=0.5)
         ax_rp2.set_title('RP for System')
-        rp_plot.plot(ax_rp2, delayed_out2[::1,:], eps=0.5)
+        rp_plot.plot(ax_rp2, delayed_out2[::2,:], eps=0.5)
 
         
         te_2to1, te_1to2 = [], []
@@ -163,9 +164,10 @@ class Analysis:
         # print(self.lyapunov(self.time, [self.shaped_dx1, self.shaped_dy1]))
 
     def delay_coord_analysis(self, data1, data2):
+        _max_tau = 50
         ic = probability.InfoContent()
-        delayed_tau1, mic1 = ic.get_tau(data1, max_tau=20)
-        delayed_tau2, mic2 = ic.get_tau(data2, max_tau=20)
+        delayed_tau1, mic1 = ic.get_tau(data1[100:], max_tau=_max_tau)
+        delayed_tau2, mic2 = ic.get_tau(data2[100:], max_tau=_max_tau)
         print('tau1: ', delayed_tau1)
         print('tau2: ', delayed_tau2)
 
@@ -173,7 +175,7 @@ class Analysis:
         ax_mic.set_title('Mutual Information Content(tau:{},{})'.format(delayed_tau1,delayed_tau2))
         ax_mic.plot(range(1,len(mic1)+1), mic1, c='red')
         ax_mic.plot(range(1,len(mic2)+1), mic2, c='green')
-        ax_mic.set_xticks(np.arange(0, 20+1, 1))
+        ax_mic.set_xticks(np.arange(0, _max_tau+1, 1))
         ax_mic.grid()
 
         delayed_dim = 3
@@ -205,6 +207,7 @@ class Analysis:
         shaped_data = []
         for i in range(len(_time_idx)):
             shaped_data.append(data[_time_idx[i]])
+
 
         '''
         # 差分データを取得

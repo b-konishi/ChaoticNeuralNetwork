@@ -10,6 +10,7 @@ import draw
 import sys
 import math
 import time
+import csv
 import numpy as np
 import threading
 import warnings
@@ -335,6 +336,9 @@ class CNN_Simulator:
             # diff_term = tf.reduce_sum(tf.tan(tf.nn.relu(cor)-tf.reduce_max(cor)+np.pi/2-1e-10))
             '''
             cor = tf.contrib.distributions.auto_correlation(theta)
+            cor = tf.where(tf.is_nan(cor), tf.constant(0.0,shape=cor.get_shape()), cor)
+            
+            '''
             _, var = tf.nn.moments(cor[1:]-cor[:-1], [0])
             var = tf.cond(tf.is_nan(var), lambda:0., lambda:var)
             # diff_term = tf.log(var**3+1e-100)
@@ -347,13 +351,14 @@ class CNN_Simulator:
             # diff_term = tf.log(10/3 * )
             
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
-            # diff_term = 1/(tf.reduce_max(ccf)+1e-10)**2 
+            '''
+            diff_term = tf.exp(tf.reduce_max(cor[1:])**2)
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
             tf.summary.scalar('error_CCF2', tf.reduce_mean(theta)*180/np.pi)
 
             # return -te_term, te_term, diff_term
-            return -(te_term+diff_term), te_term, diff_term, theta
+            return -(te_term-diff_term), te_term, diff_term, theta
 
         '''
         with tf.name_scope('loss_lyapunov'):
@@ -450,7 +455,7 @@ class CNN_Simulator:
         trajectoryB = []
         init_pos1, init_pos2 = event.get_init_pos()
 
-        # outB = np.random.rand(self.seq_len, 2)
+        '''
         outB = []
         for i in range(int(np.ceil(self.seq_len/3))):
             r = np.random.rand(1,self.input_units).tolist()
@@ -459,6 +464,19 @@ class CNN_Simulator:
             else:
                 outB.extend(r*3)
         outB = np.array(outB)
+        '''
+
+        # Using 3-dim spline function
+        N = int(self.seq_len/4)
+        r = np.random.rand(N, self.input_units)-0.5
+        xnew = np.linspace(0,1,num=self.seq_len)
+        f_cs = []
+        outB = []
+        for i in range(self.input_units):
+            outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
+        print(outB)
+        outB = np.array(outB).T
+
 
         is_drawing = True
         is_changemode = True
@@ -467,10 +485,13 @@ class CNN_Simulator:
         outA_all, outB_all = [], []
         epoch = 0
         proctime = 1
-        t_entropy = deque([])
+        tmp_error = deque([])
         switch_prob = []
+        error_slope = []
         
         f = open(self.act_logfile, mode='w')
+        writer = csv.writer(f, lineterminator='\n')
+        writer.writerow(['loss','TE_term','DIFF_term'])
 
         print("SYSTEM_WAIT")
         while not event.get_startup_signal():
@@ -478,7 +499,7 @@ class CNN_Simulator:
             pass
         # for epoch in range(self.epoch_size):
         while not event.get_systemstop_signal():
-            print('epoch:{}, mode:{}'.format(epoch, modeA))
+            print('### epoch:{}, mode:{} ###'.format(epoch, modeA))
 
             network_proctime_st = datetime.datetime.now()
 
@@ -489,7 +510,8 @@ class CNN_Simulator:
             networkbg_thread.start()
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 feed_dictA = {inputs:outB, Mode:modeA}
-                outA, _te_term, _diff_term, gradientsA = sess.run([outputs, te_term, diff_term, grad], feed_dict=feed_dictA)
+                outA, _error, _te_term, _diff_term, gradientsA = sess.run([outputs, error, te_term, diff_term, grad], feed_dict=feed_dictA)
+                writer.writerow([_error, _te_term, _diff_term])
                 p = sess.run(param, feed_dict=feed_dictA)
                 print('param: ', np.mean(p)*180/np.pi)
 
@@ -498,10 +520,17 @@ class CNN_Simulator:
                         print('gradA: ', g[0][0:5])
                     print('te_term: ', _te_term)
                     print('diff_term: ', _diff_term)
-                    print('outA: ', outA)
+                    # print('outA: ', outA)
 
                 summaryA, _ = sess.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
+
+                size = 3
+                for i in range(len(outA)-(size-1)):
+                    _out = 0
+                    for j in range(size):
+                        _out += outA[i+j,:]
+                    outA[i+(size-1),:] = _out/size
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
                 '''
@@ -517,31 +546,27 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/5)
-                x = np.linspace(0,1,num=N)
+                N = int(self.seq_len/4)
                 r = np.random.rand(N, self.output_units)-0.5
                 if epoch != 0:
                     r[0,:] = past_outA[-1]
-
                 xnew = np.linspace(0,1,num=self.seq_len)
                 f_cs = []
                 outA = []
                 for i in range(self.output_units):
-                    outA.append(interp1d(x, r[:,i], kind='cubic')(xnew))
+                    outA.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
                 print(outA)
                 outA = np.array(outA).T
 
 
             # 前回の出力からの移動平均
             past_size = 3
-            size = 3
             if epoch != 0:
                 _out = outA[0,:]
-                for i in range(size-1):
+                for i in range(past_size-1):
                     _out += past_outA[-(i+1),:]
                 outA[0,:] = _out/past_size
             '''
-
             for i in range(len(outA)-(size-1)):
                 _out = 0
                 for j in range(size):
@@ -564,14 +589,15 @@ class CNN_Simulator:
 
                 # ADJUST
                 time.sleep(0.05)
+            outB = np.array(outB)
 
-
-            print('outB[:,0]: ', np.array(outB)[:,0])
+            # print('outB[:,0]: ', np.array(outB)[:,0])
             
-            print('var', sum(np.var(outB,0)))
-            # ADJUST
-            if sum(np.var(outB,0)) < 20:
+            print('var', sum(np.var(outB[:,0:2],0)))
+            # RANDOM INPUT
+            if sum(np.var(outB[:,0:2],0)) < 10:
                 print('INPUT=RANDOM')
+                '''
                 outB = []
                 for i in range(int(np.ceil(self.seq_len/3))):
                     r = np.random.rand(1,self.input_units).tolist()
@@ -580,16 +606,19 @@ class CNN_Simulator:
                     else:
                         outB.extend(r*3)
                 outB = np.array(outB)
-
-
                 '''
-                r = np.random.rand(int((self.seq_len/3)), 2)
-                outB = np.zeros([self.seq_len,2])
-                outB[0:self.seq_len:3] = r
-                outB[1:self.seq_len:3] = r
-                outB[2:self.seq_len:3] = r
-                # outB = np.random.rand(self.seq_len, 2)
-                '''
+
+                # Using 3-dim spline function
+                N = int(self.seq_len/4)
+                r = np.random.rand(N, self.input_units)-0.5
+                if epoch != 0:
+                    r[0,:] = past_outB[-1]
+                xnew = np.linspace(0,1,num=self.seq_len)
+                f_cs = []
+                outB = []
+                for i in range(self.input_units):
+                    outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
+                outB = np.array(outB).T
 
 
             if not is_drawing:
@@ -602,26 +631,52 @@ class CNN_Simulator:
 
             outA_all.extend(outA)
             outB_all.extend(outB)
+            
 
-
+            # Boredom
+            # A: Error-Value is not change
+            # B: Error-Value increases 
+            bored_len = 10
             if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
-                t_entropy.append(_te_term)
-                if len(t_entropy) > 20:
-                    t_entropy.popleft()
+                tmp_error.append(_error)
+                if len(tmp_error) > bored_len:
+                    tmp_error.popleft()
 
-                if len(t_entropy) == 20:
-                    _s = np.mean(np.diff(t_entropy))
-                    switch_prob.append(np.sign(_s) * 1/(abs(_s)+1))
-                    print('TE-diff: ', np.diff(t_entropy))
-                    print('Pr(switch) = ', switch_prob[-1])
-
-
-                    if switch_prob[-1]>0.9 or (np.sign(_s)==-1 and switch_prob[-1]<-0.1):
-                        print('[Change Mode]: ', switch_prob[-1])
-                        t_entropy = deque([])
+                if len(tmp_error) == bored_len:
+                    a, b = np.polyfit(range(bored_len), tmp_error, 1)
+                    error_slope.append(a)
+                    print('slope: ', a)
+                    
+                    if abs(a) < 0.5:
+                        print('[Change Mode A]: ', a)
+                        tmp_error = deque([])
                         modeA = not modeA
                         mode_switch.append(epoch)
                         event.set_system_mode(modeA)
+                    elif a > 15:
+                        print('[Change Mode B]: ', a)
+                        tmp_error = deque([])
+                        modeA = not modeA
+                        mode_switch.append(epoch)
+                        event.set_system_mode(modeA)
+
+                '''
+                _diff = np.diff(tmp_error)
+
+
+                _s = np.mean(np.diff(tmp_error))
+                switch_prob.append(np.sign(_s) * 1/(abs(_s)+1))
+                print('TE-diff: ', np.diff(tmp_error))
+                print('Pr(switch) = ', switch_prob[-1])
+
+
+                if switch_prob[-1]>0.9 or (np.sign(_s)==-1 and switch_prob[-1]<-0.1):
+                    print('[Change Mode]: ', switch_prob[-1])
+                    tmp_error = deque([])
+                    modeA = not modeA
+                    mode_switch.append(epoch)
+                    event.set_system_mode(modeA)
+                '''
                 
 
             '''
@@ -660,6 +715,7 @@ class CNN_Simulator:
             # print('[B] value={}'.format(outB))
 
             past_outA = outA
+            past_outB = outB
             epoch += 1
 
         # print('outA: ', np.array(trajectoryA))
@@ -668,12 +724,14 @@ class CNN_Simulator:
         f.close()
         mode_switch = np.unique(mode_switch) * self.seq_len
         print('mode_switch: ', mode_switch)
+        print('slope: ', error_slope)
 
+        '''
         print('switch_prob: ', switch_prob)
-
         plt.figure(figsize=(10,6))
         plt.plot(switch_prob, marker='.')
         plt.show()
+        '''
 
 
         '''

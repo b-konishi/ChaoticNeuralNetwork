@@ -38,9 +38,10 @@ class RecurrencePlot:
         pass
 
     def plot(self, ax, data, eps=0.4):
-        if len(data) > 300:
-            print("Too many data(Over 300)")
-            data = data[:300]
+        max_num = 400
+        if len(data) > max_num:
+            print("Too many data(Over {}): {}".format(max_num, len(data)))
+            data = data[:max_num]
 
         data = np.reshape(data, [len(data),1]) if len(np.shape(data)) == 1 else np.array(data)
         data = (data-np.min(data,axis=0))/(np.max(data,axis=0)-np.min(data,axis=0))
