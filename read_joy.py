@@ -21,7 +21,7 @@ class Joycon:
             joys = pygame.joystick.Joystick(0)
             joys.init()
             # self.monitor()
-            # print(self.get_value())
+            # self.get_value()
         except pygame.error:
             print('error has occured')
             print('It is possible to be disconnected...')
@@ -49,12 +49,29 @@ class Joycon:
                 return
             elif e.type == KEYDOWN and e.key == K_ESCAPE:
                 return
+            elif e.type == JOYBUTTONDOWN:
+                pass
             elif e.type == JOYAXISMOTION:
                 self.axislist[e.axis] = e.value
                 self.rightaxis = self.axislist[2:3+1]
                 # print('rightstick | x | {0:.3f} | z | {1:.3f}'.format(self.rightaxis[0], self.rightaxis[1]))
 
         return self.rightaxis
+
+    def get_button(self):
+        is_button = False
+        for e in pygame.event.get():
+            if e.type == QUIT:
+                return
+            elif e.type == KEYDOWN and e.key == K_ESCAPE:
+                return
+            elif e.type == JOYBUTTONDOWN:
+                is_button = True
+                pass
+            elif e.type == JOYAXISMOTION:
+                pass
+
+        return is_button
 
     def monitor(self):
         pygame.init()

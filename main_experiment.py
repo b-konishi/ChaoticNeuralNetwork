@@ -161,8 +161,8 @@ class CNN_Simulator:
                 params['bi'] = bi
 
             # input: [None, input_units]
-            in_norm = self.tf_normalize(inputs)
-            # in_norm = inputs
+            # in_norm = self.tf_normalize(inputs)
+            in_norm = inputs
             fi = tf.matmul(in_norm, Wi) + bi
             sigm = tf.nn.sigmoid(fi)
 
@@ -352,7 +352,7 @@ class CNN_Simulator:
             
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             '''
-            diff_term = tf.exp(tf.reduce_max(cor[1:])**2)
+            diff_term = tf.exp(tf.pow(tf.reduce_mean(cor[1:]), 2))
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
             tf.summary.scalar('error_CCF2', tf.reduce_mean(theta)*180/np.pi)
@@ -467,14 +467,14 @@ class CNN_Simulator:
         '''
 
         # Using 3-dim spline function
-        N = int(self.seq_len/4)
+        N = int(self.seq_len/2)
         r = np.random.rand(N, self.input_units)-0.5
         xnew = np.linspace(0,1,num=self.seq_len)
         f_cs = []
         outB = []
         for i in range(self.input_units):
             outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
-        print(outB)
+        print('outB: ', outB)
         outB = np.array(outB).T
 
 
@@ -531,6 +531,19 @@ class CNN_Simulator:
                     for j in range(size):
                         _out += outA[i+j,:]
                     outA[i+(size-1),:] = _out/size
+                '''
+
+                # Using 3-dim spline function
+                # if epoch != 0:
+                # outA[0,:] = past_outA[-1]
+                xnew = np.linspace(0,1,num=self.seq_len*2)
+                f_cs = []
+                outA = []
+                for i in range(self.output_units):
+                    outA.append(interp1d(range(self.seq_len), _outA[:,i], kind='cubic')(xnew))
+                outA = np.array(outA).T
+                print('outA: ', outA)
+                '''
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
                 '''
@@ -546,21 +559,21 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/4)
+                N = int(self.seq_len/2)
                 r = np.random.rand(N, self.output_units)-0.5
-                if epoch != 0:
-                    r[0,:] = past_outA[-1]
+                # if epoch != 0:
+                # r[0,:] = past_outA[-1]
                 xnew = np.linspace(0,1,num=self.seq_len)
                 f_cs = []
                 outA = []
                 for i in range(self.output_units):
                     outA.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
-                print(outA)
                 outA = np.array(outA).T
+                print(outA)
 
 
             # 前回の出力からの移動平均
-            past_size = 3
+            past_size = 4
             if epoch != 0:
                 _out = outA[0,:]
                 for i in range(past_size-1):
@@ -590,6 +603,7 @@ class CNN_Simulator:
                 # ADJUST
                 time.sleep(0.05)
             outB = np.array(outB)
+            print(outB)
 
             # print('outB[:,0]: ', np.array(outB)[:,0])
             
@@ -609,16 +623,18 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/4)
-                r = np.random.rand(N, self.input_units)-0.5
-                if epoch != 0:
-                    r[0,:] = past_outB[-1]
+                N = int(self.seq_len/2)
+                r = np.random.rand(N, 2)-0.5
+                # if epoch != 0:
+                #    r[0,:] = past_outB[-1]
                 xnew = np.linspace(0,1,num=self.seq_len)
                 f_cs = []
-                outB = []
-                for i in range(self.input_units):
-                    outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
-                outB = np.array(outB).T
+                # outB = []
+                for i in range(2):
+                    outB[:,i] = interp1d(range(N), r[:,i], kind='cubic')(xnew)
+                    # outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
+                outB = np.array(outB)
+                print(outB)
 
 
             if not is_drawing:
@@ -636,7 +652,7 @@ class CNN_Simulator:
             # Boredom
             # A: Error-Value is not change
             # B: Error-Value increases 
-            bored_len = 10
+            bored_len = 20
             if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 tmp_error.append(_error)
                 if len(tmp_error) > bored_len:

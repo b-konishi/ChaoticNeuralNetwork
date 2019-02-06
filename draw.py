@@ -33,6 +33,7 @@ class Event:
     TESTING_TIME = 15
 
     DIFF = 0.04
+    h_speed = 0.04
 
     USER_COLOR = '#ff4500'
     COM_COLOR = '#32cd32'
@@ -278,7 +279,7 @@ class Event:
             self.frame.update()
 
             try:
-                self.dx1, self.dy1 = np.array(self.joy.get_value())*0.05
+                self.dx1, self.dy1 = np.array(self.joy.get_value())*self.h_speed
             except pygame.error:
                 print('Pygame ERROR')
                 self.on_closing()
@@ -433,7 +434,6 @@ class Event:
                     dy2_ = -dy2_
                     dy2_ = 0
                 elif self.y2_pos > self.canvas_h-self.CIRCLE_D:
-                    print('posy2: ', self.y2_pos)
                     # dy2_ = 0 - (self.y2_pos-dy2_)
                     # self.y2_pos = 0
                     # self.y2_pos -= dy2_*2
@@ -470,7 +470,7 @@ class Event:
                 time.sleep(0.1)
 
             try:
-                self.dx1, self.dy1 = np.array(self.joy.get_value())*0.05
+                self.dx1, self.dy1 = np.array(self.joy.get_value())*self.h_speed
             except pygame.error:
                 print('Pygame ERROR')
                 self.on_closing()

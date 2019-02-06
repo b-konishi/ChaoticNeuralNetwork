@@ -92,9 +92,9 @@ class Analysis:
 
         fig, (ax_rp1,ax_rp2) = plt.subplots(ncols=2, figsize=(24,12))
         ax_rp1.set_title('RP for Human')
-        rp_plot.plot(ax_rp1, delayed_out1[::2,:], eps=0.5)
+        rp_plot.plot(ax_rp1, delayed_out1[::1,:], eps=0.5)
         ax_rp2.set_title('RP for System')
-        rp_plot.plot(ax_rp2, delayed_out2[::2,:], eps=0.5)
+        rp_plot.plot(ax_rp2, delayed_out2[::1,:], eps=0.5)
 
         
         te_2to1, te_1to2 = [], []
@@ -180,7 +180,7 @@ class Analysis:
 
         delayed_dim = 3
         delayed_out1, delayed_out2 = [], []
-        for i in reversed(range(delayed_dim)):
+        for i in (range(delayed_dim)):
             delayed_out1.append(np.roll(data1, -i*delayed_tau1)[:len(data1)-delayed_tau1])
             delayed_out2.append(np.roll(data2, -i*delayed_tau2)[:len(data2)-delayed_tau2])
 
