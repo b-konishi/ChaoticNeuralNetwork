@@ -554,6 +554,7 @@ class CNN_Simulator:
                     for j in range(size):
                         _out += outA[i+j,:]
                     outA[i+(size-1),:] = _out/size
+
                 if epoch != 0:
                     outA = outA[size-1:]
                 print('len(outA): ',len(outA))

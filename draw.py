@@ -32,7 +32,7 @@ class Event:
     INTERACTIVE_TIME = 5*60
     TESTING_TIME = 15
 
-    DIFF = 0.04
+    DIFF = 0.03
     h_speed = 0.04
 
     USER_COLOR = '#ff4500'
