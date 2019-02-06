@@ -152,16 +152,16 @@ class CNN_Simulator:
                 inputs = tf.placeholder(dtype = tf.float32, shape = [length, self.input_units], name='inputs')
             with tf.name_scope('Wi'):
                 Wi = tf.Variable(self.weight(shape=[self.input_units, self.inner_units]), name='Wi')
-                tf.summary.histogram('Wi', Wi)
+                # tf.summary.histogram('Wi', Wi)
                 params['Wi'] = Wi
 
             with tf.name_scope('bi'):
                 bi = tf.Variable(self.weight(shape=[1,self.inner_units]), name='bi')
-                tf.summary.histogram('bi', bi)
+                # tf.summary.histogram('bi', bi)
                 params['bi'] = bi
 
             # input: [None, input_units]
-            # in_norm = self.tf_normalize(inputs)
+            in_norm = self.tf_normalize(inputs)
             in_norm = inputs
             fi = tf.matmul(in_norm, Wi) + bi
             sigm = tf.nn.sigmoid(fi)
@@ -185,12 +185,12 @@ class CNN_Simulator:
 
             with tf.name_scope('Wo'):
                 Wo = tf.Variable(self.weight(shape=[self.inner_units, self.output_units]), name='Wo')
-                tf.summary.histogram('Wo', Wo)
+                # tf.summary.histogram('Wo', Wo)
                 params['Wo'] = Wo
 
             with tf.name_scope('bo'):
                 bo = tf.Variable(self.weight(shape=[1, self.output_units]), name='bo')
-                tf.summary.histogram('bo', bo)
+                # tf.summary.histogram('bo', bo)
                 params['bo'] = bo
 
             # fo = tf.matmul(inner_output, tf.multiply(Wo, Io))
@@ -352,7 +352,7 @@ class CNN_Simulator:
             
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             '''
-            diff_term = tf.exp(tf.pow(tf.reduce_mean(cor[1:]), 2))
+            diff_term = tf.exp(tf.pow(tf.reduce_max(cor[1:]), 2))
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
             tf.summary.scalar('error_CCF2', tf.reduce_mean(theta)*180/np.pi)
@@ -467,13 +467,14 @@ class CNN_Simulator:
         '''
 
         # Using 3-dim spline function
-        N = int(self.seq_len/2)
+        N = int(self.seq_len/5)
         r = np.random.rand(N, self.input_units)-0.5
-        xnew = np.linspace(0,1,num=self.seq_len)
+        x = np.linspace(-0.5,0.5,num=N)
+        xnew = np.linspace(-0.5,0.5,num=self.seq_len)
         f_cs = []
         outB = []
         for i in range(self.input_units):
-            outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
+            outB.append(interp1d(x, r[:,i], kind='cubic')(xnew))
         print('outB: ', outB)
         outB = np.array(outB).T
 
@@ -503,12 +504,13 @@ class CNN_Simulator:
 
             network_proctime_st = datetime.datetime.now()
 
-            # event.set_network_interval(proctime, 3)
-            # ネットワークの学習処理時間を埋めるための処理
-            networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
-            networkbg_thread.daemon = True
-            networkbg_thread.start()
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
+                # event.set_network_interval(proctime, 3)
+                # ネットワークの学習処理時間を埋めるための処理
+                networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 5])
+                networkbg_thread.daemon = True
+                networkbg_thread.start()
+
                 feed_dictA = {inputs:outB, Mode:modeA}
                 outA, _error, _te_term, _diff_term, gradientsA = sess.run([outputs, error, te_term, diff_term, grad], feed_dict=feed_dictA)
                 writer.writerow([_error, _te_term, _diff_term])
@@ -525,25 +527,28 @@ class CNN_Simulator:
                 summaryA, _ = sess.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
 
-                size = 3
+                '''
+                # Using 3-dim spline function
+                # if epoch != 0:
+                # outA[0,:] = past_outA[-1]
+                print('outA: ', _outA)
+                x = np.linspace(-0.5,0.5,num=self.seq_len)
+                xnew = np.linspace(-0.5,0.5,num=self.seq_len*2)
+                f_cs = []
+                outA = []
+                for i in range(self.output_units):
+                    outA.append(interp1d(x, _outA[:,i], kind='cubic')(xnew))
+                outA = np.array(outA).T
+                print('outA: ', outA)
+                '''
+
+                size = 4
                 for i in range(len(outA)-(size-1)):
                     _out = 0
                     for j in range(size):
                         _out += outA[i+j,:]
                     outA[i+(size-1),:] = _out/size
-                '''
 
-                # Using 3-dim spline function
-                # if epoch != 0:
-                # outA[0,:] = past_outA[-1]
-                xnew = np.linspace(0,1,num=self.seq_len*2)
-                f_cs = []
-                outA = []
-                for i in range(self.output_units):
-                    outA.append(interp1d(range(self.seq_len), _outA[:,i], kind='cubic')(xnew))
-                outA = np.array(outA).T
-                print('outA: ', outA)
-                '''
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
                 '''
@@ -559,15 +564,16 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/2)
+                N = int(self.seq_len/5)
                 r = np.random.rand(N, self.output_units)-0.5
                 # if epoch != 0:
                 # r[0,:] = past_outA[-1]
-                xnew = np.linspace(0,1,num=self.seq_len)
+                x = np.linspace(-0.5,0.5,num=N)
+                xnew = np.linspace(-0.5,0.5,num=self.seq_len)
                 f_cs = []
                 outA = []
                 for i in range(self.output_units):
-                    outA.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
+                    outA.append(interp1d(x, r[:,i], kind='cubic')(xnew))
                 outA = np.array(outA).T
                 print(outA)
 
@@ -623,15 +629,16 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/2)
+                N = int(self.seq_len/5)
                 r = np.random.rand(N, 2)-0.5
                 # if epoch != 0:
                 #    r[0,:] = past_outB[-1]
-                xnew = np.linspace(0,1,num=self.seq_len)
+                x = np.linspace(-0.5,0.5,num=N)
+                xnew = np.linspace(-0.5,0.5,num=self.seq_len)
                 f_cs = []
                 # outB = []
                 for i in range(2):
-                    outB[:,i] = interp1d(range(N), r[:,i], kind='cubic')(xnew)
+                    outB[:,i] = interp1d(x, r[:,i], kind='cubic')(xnew)
                     # outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
                 outB = np.array(outB)
                 print(outB)
