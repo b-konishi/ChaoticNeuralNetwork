@@ -80,6 +80,7 @@ class CNN_Simulator:
 
         # sequence-length at once
         self.seq_len = 20
+
         self.epoch_size = 100
 
         self.input_units = 4
@@ -99,6 +100,8 @@ class CNN_Simulator:
         # time delayed value
         self.tau = int(self.seq_len/100)
         self.tau = 10
+
+        self.div = 2
 
 
     def weight(self, shape = []):
@@ -352,7 +355,7 @@ class CNN_Simulator:
             
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             '''
-            diff_term = tf.exp(tf.pow(tf.reduce_max(cor[1:]), 2))
+            diff_term = tf.reduce_max(cor[1:]) * tf.abs(te_term)
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
             tf.summary.scalar('error_CCF2', tf.reduce_mean(theta)*180/np.pi)
@@ -412,6 +415,7 @@ class CNN_Simulator:
         for i in range(num):
             time.sleep(proctime/num)
             event.set_network_interval()
+            print('Add background')
             
 
     def human_agent_interaction(self):
@@ -467,7 +471,7 @@ class CNN_Simulator:
         '''
 
         # Using 3-dim spline function
-        N = int(self.seq_len/5)
+        N = int(self.seq_len/self.div)
         r = np.random.rand(N, self.input_units)-0.5
         x = np.linspace(-0.5,0.5,num=N)
         xnew = np.linspace(-0.5,0.5,num=self.seq_len)
@@ -505,14 +509,16 @@ class CNN_Simulator:
             network_proctime_st = datetime.datetime.now()
 
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
-                # event.set_network_interval(proctime, 3)
+                # event.set_network_interval(proctime, 1)
                 # ネットワークの学習処理時間を埋めるための処理
-                networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 5])
+                networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
                 networkbg_thread.daemon = True
                 networkbg_thread.start()
 
+                print(outB)
+
                 feed_dictA = {inputs:outB, Mode:modeA}
-                outA, _error, _te_term, _diff_term, gradientsA = sess.run([outputs, error, te_term, diff_term, grad], feed_dict=feed_dictA)
+                _outA, _error, _te_term, _diff_term, gradientsA = sess.run([outputs, error, te_term, diff_term, grad], feed_dict=feed_dictA)
                 writer.writerow([_error, _te_term, _diff_term])
                 p = sess.run(param, feed_dict=feed_dictA)
                 print('param: ', np.mean(p)*180/np.pi)
@@ -527,7 +533,6 @@ class CNN_Simulator:
                 summaryA, _ = sess.run([merged, train_step], feed_dictA)
                 writerA.add_summary(summaryA, epoch)
 
-                '''
                 # Using 3-dim spline function
                 # if epoch != 0:
                 # outA[0,:] = past_outA[-1]
@@ -540,14 +545,18 @@ class CNN_Simulator:
                     outA.append(interp1d(x, _outA[:,i], kind='cubic')(xnew))
                 outA = np.array(outA).T
                 print('outA: ', outA)
-                '''
 
                 size = 4
+                if epoch != 0:
+                    outA = np.insert(outA, 0, past_outA[-(size-1):], axis=0)
                 for i in range(len(outA)-(size-1)):
                     _out = 0
                     for j in range(size):
                         _out += outA[i+j,:]
                     outA[i+(size-1),:] = _out/size
+                if epoch != 0:
+                    outA = outA[size-1:]
+                print('len(outA): ',len(outA))
 
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
@@ -564,7 +573,7 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/5)
+                N = int(self.seq_len/self.div)
                 r = np.random.rand(N, self.output_units)-0.5
                 # if epoch != 0:
                 # r[0,:] = past_outA[-1]
@@ -575,16 +584,19 @@ class CNN_Simulator:
                 for i in range(self.output_units):
                     outA.append(interp1d(x, r[:,i], kind='cubic')(xnew))
                 outA = np.array(outA).T
+                print('r: ', r)
                 print(outA)
 
 
-            # 前回の出力からの移動平均
-            past_size = 4
-            if epoch != 0:
-                _out = outA[0,:]
-                for i in range(past_size-1):
-                    _out += past_outA[-(i+1),:]
-                outA[0,:] = _out/past_size
+                '''
+                # 前回の出力からの移動平均
+                past_size = 4
+                if epoch != 0:
+                    _out = outA[0,:]
+                    for i in range(past_size-1):
+                        _out += past_outA[-(i+1),:]
+                    outA[0,:] = _out/past_size
+                '''
             '''
             for i in range(len(outA)-(size-1)):
                 _out = 0
@@ -607,9 +619,8 @@ class CNN_Simulator:
                 outB.append(diff+diff_pos)
 
                 # ADJUST
-                time.sleep(0.05)
+                time.sleep(0.04)
             outB = np.array(outB)
-            print(outB)
 
             # print('outB[:,0]: ', np.array(outB)[:,0])
             
@@ -629,7 +640,7 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/5)
+                N = int(self.seq_len/self.div)
                 r = np.random.rand(N, 2)-0.5
                 # if epoch != 0:
                 #    r[0,:] = past_outB[-1]
@@ -641,13 +652,12 @@ class CNN_Simulator:
                     outB[:,i] = interp1d(x, r[:,i], kind='cubic')(xnew)
                     # outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
                 outB = np.array(outB)
-                print(outB)
 
 
             if not is_drawing:
                 break
 
-            outB = np.array(outB)/mag
+            # outB = np.array(outB)/mag
 
             # outA_all.extend(list(np.array(outA)[:,0]))
             # outB_all.extend(list(np.array(outB)[:,0]))
@@ -676,7 +686,7 @@ class CNN_Simulator:
                         modeA = not modeA
                         mode_switch.append(epoch)
                         event.set_system_mode(modeA)
-                    elif a > 15:
+                    elif a > 5:
                         print('[Change Mode B]: ', a)
                         tmp_error = deque([])
                         modeA = not modeA
