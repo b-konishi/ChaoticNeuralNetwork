@@ -473,7 +473,7 @@ class CNN_Simulator:
         '''
 
         # Using 3-dim spline function
-        N = self.random_seq_len
+        N = self.seq_len
         r = np.random.rand(N, self.input_units)-0.5
         x = np.linspace(-0.5,0.5,num=N)
         xnew = np.linspace(-0.5,0.5,num=self.seq_len)
