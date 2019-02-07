@@ -165,7 +165,7 @@ class CNN_Simulator:
 
             # input: [None, input_units]
             in_norm = self.tf_normalize(inputs)
-            in_norm = inputs
+            # in_norm = inputs
             fi = tf.matmul(in_norm, Wi) + bi
             sigm = tf.nn.sigmoid(fi)
 
@@ -355,7 +355,9 @@ class CNN_Simulator:
             
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             '''
-            diff_term = tf.reduce_max(cor[1:]) * tf.abs(te_term)
+            # diff_term = tf.reduce_max(cor[1:]) * tf.abs(te_term)
+            # diff_term = tf.exp(tf.reduce_max(cor[1:]))
+            diff_term = tf.reduce_max(cor[1:])
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
             tf.summary.scalar('error_CCF2', tf.reduce_mean(theta)*180/np.pi)
@@ -546,7 +548,7 @@ class CNN_Simulator:
                 outA = np.array(outA).T
                 print('outA: ', outA)
 
-                size = 4
+                size = 5
                 if epoch != 0:
                     outA = np.insert(outA, 0, past_outA[-(size-1):], axis=0)
                 for i in range(len(outA)-(size-1)):
@@ -642,14 +644,14 @@ class CNN_Simulator:
 
                 # Using 3-dim spline function
                 N = self.random_seq_len
-                r = np.random.rand(N, 2)-0.5
+                r = np.random.rand(N, self.input_units)-0.5
                 # if epoch != 0:
                 #    r[0,:] = past_outB[-1]
                 x = np.linspace(-0.5,0.5,num=N)
                 xnew = np.linspace(-0.5,0.5,num=self.seq_len)
                 f_cs = []
                 # outB = []
-                for i in range(2):
+                for i in range(self.input_units):
                     outB[:,i] = interp1d(x, r[:,i], kind='cubic')(xnew)
                     # outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
                 outB = np.array(outB)
@@ -670,7 +672,7 @@ class CNN_Simulator:
             # Boredom
             # A: Error-Value is not change
             # B: Error-Value increases 
-            bored_len = 20
+            bored_len = 30
             if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                 tmp_error.append(_error)
                 if len(tmp_error) > bored_len:
@@ -681,13 +683,13 @@ class CNN_Simulator:
                     error_slope.append(a)
                     print('slope: ', a)
                     
-                    if abs(a) < 0.5:
+                    if abs(a) < np.tan(10/180*np.pi):
                         print('[Change Mode A]: ', a)
                         tmp_error = deque([])
                         modeA = not modeA
                         mode_switch.append(epoch)
                         event.set_system_mode(modeA)
-                    elif a > 5:
+                    elif a > np.tan(80/180*np.pi):
                         print('[Change Mode B]: ', a)
                         tmp_error = deque([])
                         modeA = not modeA
