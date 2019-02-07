@@ -356,8 +356,8 @@ class CNN_Simulator:
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             '''
             # diff_term = tf.reduce_max(cor[1:]) * tf.abs(te_term)
-            # diff_term = tf.exp(tf.reduce_max(cor[1:]))
-            diff_term = tf.reduce_max(cor[1:])
+            diff_term = tf.exp(tf.reduce_max(cor[1:]))
+            # diff_term = tf.reduce_max(cor[1:])
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
             tf.summary.scalar('error_CCF2', tf.reduce_mean(theta)*180/np.pi)
@@ -515,7 +515,7 @@ class CNN_Simulator:
                 # ネットワークの学習処理時間を埋めるための処理
                 networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
                 networkbg_thread.daemon = True
-                networkbg_thread.start()
+                # networkbg_thread.start()
 
                 print(outB)
 
