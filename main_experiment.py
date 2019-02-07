@@ -81,8 +81,8 @@ class CNN_Simulator:
         # sequence-length at once
         self.seq_len = 20
 
-        self.system_seq_len = int(self.seq_len*2)
-        self.random_seq_len = int(self.seq_len/5)
+        # self.system_seq_len = int(self.seq_len*2)
+        # self.random_seq_len = int(self.seq_len/5)
 
         self.epoch_size = 100
 
@@ -482,7 +482,8 @@ class CNN_Simulator:
         for i in range(self.input_units):
             outB.append(interp1d(x, r[:,i], kind='cubic')(xnew))
         print('outB: ', outB)
-        outB = np.array(outB).T
+        outB = np.array(outB).T.tolist()
+        # outB = np.array(outB).T
 
 
         is_drawing = True
@@ -511,55 +512,113 @@ class CNN_Simulator:
             network_proctime_st = datetime.datetime.now()
 
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
-                # event.set_network_interval(proctime, 1)
-                # ネットワークの学習処理時間を埋めるための処理
-                networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
-                networkbg_thread.daemon = True
-                # networkbg_thread.start()
-
-                print(outB)
 
                 feed_dictA = {inputs:outB, Mode:modeA}
-                _outA, _error, _te_term, _diff_term, gradientsA = sess.run([outputs, error, te_term, diff_term, grad], feed_dict=feed_dictA)
-                writer.writerow([_error, _te_term, _diff_term])
-                p = sess.run(param, feed_dict=feed_dictA)
-                print('param: ', np.mean(p)*180/np.pi)
+                outA = sess.run(outputs, feed_dict=feed_dictA)
 
-                if epoch % 1 == 0:
+                # Using 3-dim spline function
+                x = np.linspace(0, self.seq_len-1, num=self.seq_len)
+                xnew = np.linspace(0, 2, num=10)
+                spline_outA = []
+                for i in range(self.output_units):
+                    spline_outA.append(interp1d(x, np.array(outA)[:,i], kind='cubic')(xnew))
+                spline_outA = np.array(spline_outA).T.tolist()
+
+                mag = 5
+                for out in spline_outA:
+                    event.set_movement(out, mag)
+                    time.sleep(0.01)
+
+                diff, diff_pos, is_drawing = event.get_diff()
+                outB.pop(0)
+                outB.append(diff+diff_pos)
+
+                if epoch % self.seq_len == 0:
+                    print('outA: ', outA)
+
+                    # ネットワークの学習処理時間を埋めるための処理
+                    networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
+                    networkbg_thread.daemon = True
+                    networkbg_thread.start()
+                    
+                    summaryA, _t, gradientsA = sess.run([merged, train_step, grad], feed_dictA)
+                    _error, _te_term, _diff_term, _param = sess.run([error, te_term, diff_term, param], feed_dictA)
+                    writer.writerow([_error, _te_term, _diff_term])
+                    writerA.add_summary(summaryA, epoch)
+
                     for (g, v) in gradientsA:
                         print('gradA: ', g[0][0:5])
                     print('te_term: ', _te_term)
                     print('diff_term: ', _diff_term)
-                    # print('outA: ', outA)
+                    print('theta: ', np.mean(_param)*180/np.pi)
 
-                summaryA, _ = sess.run([merged, train_step], feed_dictA)
-                writerA.add_summary(summaryA, epoch)
+                    # Boredom
+                    # A: Error-Value is not change
+                    # B: Error-Value increases 
+                    bored_len = 30
+                    if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
+                        tmp_error.append(_error)
+                        if len(tmp_error) > bored_len:
+                            tmp_error.popleft()
 
-                # Using 3-dim spline function
-                # if epoch != 0:
-                # outA[0,:] = past_outA[-1]
-                print('outA: ', _outA)
-                x = np.linspace(-0.5,0.5,num=self.seq_len)
-                xnew = np.linspace(-0.5,0.5,num=self.system_seq_len)
-                f_cs = []
-                outA = []
-                for i in range(self.output_units):
-                    outA.append(interp1d(x, _outA[:,i], kind='cubic')(xnew))
-                outA = np.array(outA).T
-                print('outA: ', outA)
+                        if len(tmp_error) == bored_len:
+                            a, b = np.polyfit(range(bored_len), tmp_error, 1)
+                            error_slope.append(a)
+                            print('slope: ', a)
+                            
+                            if abs(a) < np.tan(10/180*np.pi):
+                                print('[Change Mode A]: ', a)
+                                tmp_error = deque([])
+                                modeA = not modeA
+                                mode_switch.append(epoch)
+                                event.set_system_mode(modeA)
+                            elif a > np.tan(80/180*np.pi):
+                                print('[Change Mode B]: ', a)
+                                tmp_error = deque([])
+                                modeA = not modeA
+                                mode_switch.append(epoch)
+                                event.set_system_mode(modeA)
+                
 
-                size = 5
-                if epoch != 0:
-                    outA = np.insert(outA, 0, past_outA[-(size-1):], axis=0)
-                for i in range(len(outA)-(size-1)):
-                    _out = 0
-                    for j in range(size):
-                        _out += outA[i+j,:]
-                    outA[i+(size-1),:] = _out/size
+                '''
+                var = sum(np.var(np.array(outB)[:,0:2], axis=0))
+                print('var: ', var)
+                # RANDOM INPUT
+                if var < 10:
+                    print('INPUT=RANDOM')
+                    # outB = []
+                    # for i in range(int(np.ceil(self.seq_len/3))):
+                    #     r = np.random.rand(1,self.input_units).tolist()
+                    #     if i == np.ceil(self.seq_len/3)-1 and self.seq_len%3 != 0:
+                    #         outB.extend(r*(self.seq_len%3))
+                    #     else:
+                    #         outB.extend(r*3)
+                    # outB = np.array(outB)
 
-                if epoch != 0:
-                    outA = outA[size-1:]
-                print('len(outA): ',len(outA))
+                    # Using 3-dim spline function
+                    N = self.random_seq_len
+                    r = np.random.rand(N, self.input_units)-0.5
+                    # if epoch != 0:
+                    #    r[0,:] = past_outB[-1]
+                    x = np.linspace(-0.5,0.5,num=N)
+                    xnew = np.linspace(-0.5,0.5,num=self.seq_len)
+                    f_cs = []
+                    # outB = []
+                    for i in range(self.input_units):
+                        outB[:,i] = interp1d(x, r[:,i], kind='cubic')(xnew)
+                        # outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
+                    outB = np.array(outB)
+                '''
+
+
+
+                '''
+                # ネットワークの学習処理時間を埋めるための処理
+                networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
+                networkbg_thread.daemon = True
+                networkbg_thread.start()
+                '''
+
 
 
             if self.behavior_mode == self.RANDOM_BEHAVIOR:
@@ -591,70 +650,12 @@ class CNN_Simulator:
                 print(outA)
 
 
-                '''
-                # 前回の出力からの移動平均
-                past_size = 4
-                if epoch != 0:
-                    _out = outA[0,:]
-                    for i in range(past_size-1):
-                        _out += past_outA[-(i+1),:]
-                    outA[0,:] = _out/past_size
-                '''
-            '''
-            for i in range(len(outA)-(size-1)):
-                _out = 0
-                for j in range(size):
-                    _out += outA[i+j,:]
-                outA[i+(size-1),:] = _out/size
-            '''
 
 
             network_proctime_en = datetime.datetime.now()
             proctime = (network_proctime_en-network_proctime_st).total_seconds()
             print('proctime:{}s '.format(proctime))
 
-            outB = []
-            mag = 30
-            for i in range(self.seq_len):
-                event.set_movement(np.array(outA[i]), mag)
-
-                diff, diff_pos, is_drawing = event.get_diff()
-                outB.append(diff+diff_pos)
-
-                # ADJUST
-                time.sleep(0.05)
-            outB = np.array(outB)
-
-            # print('outB[:,0]: ', np.array(outB)[:,0])
-            
-            print('var', sum(np.var(outB[:,0:2],0)))
-            # RANDOM INPUT
-            if sum(np.var(outB[:,0:2],0)) < 10:
-                print('INPUT=RANDOM')
-                '''
-                outB = []
-                for i in range(int(np.ceil(self.seq_len/3))):
-                    r = np.random.rand(1,self.input_units).tolist()
-                    if i == np.ceil(self.seq_len/3)-1 and self.seq_len%3 != 0:
-                        outB.extend(r*(self.seq_len%3))
-                    else:
-                        outB.extend(r*3)
-                outB = np.array(outB)
-                '''
-
-                # Using 3-dim spline function
-                N = self.random_seq_len
-                r = np.random.rand(N, self.input_units)-0.5
-                # if epoch != 0:
-                #    r[0,:] = past_outB[-1]
-                x = np.linspace(-0.5,0.5,num=N)
-                xnew = np.linspace(-0.5,0.5,num=self.seq_len)
-                f_cs = []
-                # outB = []
-                for i in range(self.input_units):
-                    outB[:,i] = interp1d(x, r[:,i], kind='cubic')(xnew)
-                    # outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
-                outB = np.array(outB)
 
 
             if not is_drawing:
@@ -665,54 +666,11 @@ class CNN_Simulator:
             # outA_all.extend(list(np.array(outA)[:,0]))
             # outB_all.extend(list(np.array(outB)[:,0]))
 
-            outA_all.extend(outA)
-            outB_all.extend(outB)
+            # outA_all.extend(outA)
+            # outB_all.extend(outB)
             
 
-            # Boredom
-            # A: Error-Value is not change
-            # B: Error-Value increases 
-            bored_len = 30
-            if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
-                tmp_error.append(_error)
-                if len(tmp_error) > bored_len:
-                    tmp_error.popleft()
 
-                if len(tmp_error) == bored_len:
-                    a, b = np.polyfit(range(bored_len), tmp_error, 1)
-                    error_slope.append(a)
-                    print('slope: ', a)
-                    
-                    if abs(a) < np.tan(10/180*np.pi):
-                        print('[Change Mode A]: ', a)
-                        tmp_error = deque([])
-                        modeA = not modeA
-                        mode_switch.append(epoch)
-                        event.set_system_mode(modeA)
-                    elif a > np.tan(80/180*np.pi):
-                        print('[Change Mode B]: ', a)
-                        tmp_error = deque([])
-                        modeA = not modeA
-                        mode_switch.append(epoch)
-                        event.set_system_mode(modeA)
-
-                '''
-                _diff = np.diff(tmp_error)
-
-
-                _s = np.mean(np.diff(tmp_error))
-                switch_prob.append(np.sign(_s) * 1/(abs(_s)+1))
-                print('TE-diff: ', np.diff(tmp_error))
-                print('Pr(switch) = ', switch_prob[-1])
-
-
-                if switch_prob[-1]>0.9 or (np.sign(_s)==-1 and switch_prob[-1]<-0.1):
-                    print('[Change Mode]: ', switch_prob[-1])
-                    tmp_error = deque([])
-                    modeA = not modeA
-                    mode_switch.append(epoch)
-                    event.set_system_mode(modeA)
-                '''
                 
 
             '''
