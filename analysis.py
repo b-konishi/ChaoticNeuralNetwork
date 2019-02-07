@@ -55,12 +55,10 @@ class Analysis:
         self.shaped_dy1 = np.diff(self.shaped_y1)
         self.shaped_dy2 = np.diff(self.shaped_y2)
 
-        '''
         self.shaped_dx1 = self.normalize(self.shaped_dx1)
         self.shaped_dx2 = self.normalize(self.shaped_dx2)
         self.shaped_dy1 = self.normalize(self.shaped_dy1)
         self.shaped_dy2 = self.normalize(self.shaped_dy2)
-        '''
 
         # self.shaped_dx1 = [i for i in self.shaped_dx1 if not i==0]
 
@@ -82,9 +80,9 @@ class Analysis:
         # ax_traj1.set_title('Trajectory(red:Human,Green:System)')
         # ax_traj.plot(self.x1[::100], self.y1[::100], '.-', lw=0.1)
         ax_traj1.set_title('Trajectory for Human')
-        ax_traj1.plot(self.x1[::100], self.y1[::100], c='red', lw=1)
+        ax_traj1.plot(self.shaped_x1[::1], self.shaped_y1[::1], c='red', lw=1)
         ax_traj2.set_title('Trajectory for System')
-        ax_traj2.plot(self.x2[::100], self.y2[::100], c='green', lw=1)
+        ax_traj2.plot(self.shaped_x2[::1], self.shaped_y2[::1], c='green', lw=1)
             
 
         ##### Recurrence Plot #####

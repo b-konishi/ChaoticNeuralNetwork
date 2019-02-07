@@ -61,8 +61,8 @@ class Event:
 
         self.is_output = False
         self.is_network_interval = False
+        self.is_drawing = False
 
-        self.is_drawing = True
 
         # To responce for Key-Event at same-timing
         self.history = []
@@ -126,6 +126,7 @@ class Event:
 
         self.x2_pos, self.y2_pos = self.init_pos2
         self.dx2, self.dy2 = [0]*2
+
 
         # self.canvas = tkinter.Canvas(self.frame, width=self.CANVAS_SIZE, height=self.CANVAS_SIZE, background='white')
         self.canvas = tkinter.Canvas(self.frame, width=self.canvas_w, height=self.canvas_h, background='black')
@@ -197,34 +198,9 @@ class Event:
             self.dx1, self.dy1 = self.DIFF, self.DIFF
         '''
 
-        '''
-        self.canvas.delete('t_circle1')
-        self.canvas.delete('t_circle2')
-        self.init_position()
-        circle1 = self.canvas.create_oval(self.init_pos1[0], self.init_pos1[1], self.init_pos1[0]+self.CIRCLE_D, self.init_pos1[1]+self.CIRCLE_D, fill=self.USER_COLOR, width=0, tags='t_circle1')
-        self.canvas.tag_bind('t_circle1')
-        circle2 = self.canvas.create_oval(self.init_pos2[0], self.init_pos2[1], self.init_pos2[0]+self.CIRCLE_D, self.init_pos2[1]+self.CIRCLE_D, fill=self.COM_COLOR, width=0, tags='t_circle2')
-        self.canvas.tag_bind('t_circle2')
-
-        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='3', font=('FixedSys',36), tags='text', fill='white')
-        self.frame.update()
-        time.sleep(1)
-        self.canvas.delete('text')
-        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='2', font=('FixedSys',36), tags='text', fill='white')
-        self.frame.update()
-        time.sleep(1)
-        self.canvas.delete('text')
-        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='1', font=('FixedSys',36), tags='text', fill='white')
-        self.frame.update()
-        time.sleep(1)
-        self.canvas.delete('text')
-        self.canvas.create_text(self.CANVAS_MARGIN+self.canvas_w/2, self.canvas_h/2, text='START', font=('FixedSys',36), tags='text', fill='white')
-        self.frame.update()
-        time.sleep(1)
-        self.canvas.delete('text')
-        '''
 
         # update_thread = threading.Thread(target=self.update, args=[(circle1, circle2)])
+        self.is_drawing = True
 
         update_thread = threading.Thread(target=self.update)
         # When this window is shutdowned, this thread is also finished.
@@ -265,12 +241,12 @@ class Event:
             pass
 
         _t = 0
-        start_time = datetime.datetime.now()
+        self.start_time = datetime.datetime.now()
         while True:
             self.frame.update()
 
             # Time
-            t = self.TESTING_TIME - int((datetime.datetime.now()-start_time).total_seconds())
+            t = self.TESTING_TIME - int((datetime.datetime.now()-self.start_time).total_seconds())
             if t != _t:
                 self.canvas.delete('time')
                 self.canvas.create_text(self.canvas_w/2, 30, text='{minutes:02}:{seconds:02}'.format(minutes=int(t/60), seconds=t%60), font=('FixedSys',24), tags='time', fill='white')
@@ -311,7 +287,7 @@ class Event:
                     if len(trajectory1) > TRAJ_MAX:
                         self.canvas.delete(trajectory1.popleft())
 
-            t = int((datetime.datetime.now()-start_time).total_seconds()*1000)
+            t = int((datetime.datetime.now()-self.start_time).total_seconds()*1000)
             if t/1000 > self.TESTING_TIME:
                 break
 
@@ -362,7 +338,7 @@ class Event:
         writer.writerow(['testee1','W','H','CIRCLE_D','1:user,2:system','0:ch,1:im'])
         writer.writerow([self.testee,self.canvas_w,self.canvas_h,self.CIRCLE_D])
         writer.writerow(['time[ms]','mode','x1','y1','x2','y2','x1-x2','y1-y2'])
-        start_time = datetime.datetime.now()
+        self.start_time = datetime.datetime.now()
 
         
         _t = 0
@@ -371,7 +347,7 @@ class Event:
             line_interval = self.DISP_SIZE/20
 
             # Time
-            t = self.INTERACTIVE_TIME - int((datetime.datetime.now()-start_time).total_seconds())
+            t = self.INTERACTIVE_TIME - int((datetime.datetime.now()-self.start_time).total_seconds())
             if t != _t:
                 self.canvas.delete('time')
                 if self.DEBUG:
@@ -394,8 +370,6 @@ class Event:
                         self.is_network_interval = False
                         _wait_time_count = 0
                     '''
-                if self.is_output:
-                    self.is_output = False
 
                 dx2_, dy2_ = self.dx2, self.dy2
                 self.x2_pos += dx2_
@@ -456,6 +430,9 @@ class Event:
                         
                         if len(trajectory2) > TRAJ_MAX:
                             self.canvas.delete(trajectory2.popleft())
+
+                if self.is_output:
+                    self.is_output = False
 
 
             # Random Input
@@ -558,7 +535,7 @@ class Event:
             self.dx1, self.dy1 = self.DIFF, self.DIFF
             '''
 
-            t = int((datetime.datetime.now()-start_time).total_seconds()*1000)
+            t = int((datetime.datetime.now()-self.start_time).total_seconds()*1000)
             writer.writerow([t, int(self.system_mode), self.x1_pos, self.y1_pos, self.x2_pos, self.y2_pos, self.x1_pos-self.x2_pos, self.y1_pos-self.y2_pos])
             # self.canvas.delete('t_circle')
             if t/1000 > self.INTERACTIVE_TIME:
@@ -597,7 +574,6 @@ class Event:
 
     def get_systemstop_signal(self):
         return self.system_stop
-    
 
     def set_system_mode(self, mode):
         self.system_mode = mode
@@ -629,6 +605,9 @@ class Event:
         dx_, dy_ = pos
         self.dx2, self.dy2 = dx_*mag, -dy_*mag
         self.is_output = True
+
+    def get_starttime(self):
+        return self.start_time
 
     def set_network_interval(self):
         self.is_network_interval = True
