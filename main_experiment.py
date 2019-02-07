@@ -165,7 +165,7 @@ class CNN_Simulator:
 
             # input: [None, input_units]
             in_norm = self.tf_normalize(inputs)
-            # in_norm = inputs
+            in_norm = inputs
             fi = tf.matmul(in_norm, Wi) + bi
             sigm = tf.nn.sigmoid(fi)
 
@@ -515,6 +515,7 @@ class CNN_Simulator:
 
                 feed_dictA = {inputs:outB, Mode:modeA}
                 outA = sess.run(outputs, feed_dict=feed_dictA)
+                print('outA: ', outA)
 
                 # Using 3-dim spline function
                 x = np.linspace(0, self.seq_len-1, num=self.seq_len)
@@ -533,8 +534,28 @@ class CNN_Simulator:
                 outB.pop(0)
                 outB.append(diff+diff_pos)
 
+                '''
+                var = sum(np.var(np.array(outB)[:,0:2], axis=0))
+                print('var: ', var)
+                # RANDOM INPUT
+                if var < 10:
+                    print('INPUT=RANDOM')
+                    N = self.random_seq_len
+                    r = np.random.rand(N, self.input_units)-0.5
+                    # if epoch != 0:
+                    #    r[0,:] = past_outB[-1]
+                    x = np.linspace(-0.5,0.5,num=N)
+                    xnew = np.linspace(-0.5,0.5,num=self.seq_len)
+                    f_cs = []
+                    # outB = []
+                    for i in range(self.input_units):
+                        outB[:,i] = interp1d(x, r[:,i], kind='cubic')(xnew)
+                        # outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
+                    outB = np.array(outB)
+                '''
+
                 if epoch % self.seq_len == 0:
-                    print('outA: ', outA)
+                    # print('outA: ', outA)
 
                     # ネットワークの学習処理時間を埋めるための処理
                     networkbg_thread = threading.Thread(target=self.network_bg, args=[event, proctime, 3])
@@ -555,7 +576,7 @@ class CNN_Simulator:
                     # Boredom
                     # A: Error-Value is not change
                     # B: Error-Value increases 
-                    bored_len = 30
+                    bored_len = 20
                     if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                         tmp_error.append(_error)
                         if len(tmp_error) > bored_len:
@@ -580,35 +601,6 @@ class CNN_Simulator:
                                 event.set_system_mode(modeA)
                 
 
-                '''
-                var = sum(np.var(np.array(outB)[:,0:2], axis=0))
-                print('var: ', var)
-                # RANDOM INPUT
-                if var < 10:
-                    print('INPUT=RANDOM')
-                    # outB = []
-                    # for i in range(int(np.ceil(self.seq_len/3))):
-                    #     r = np.random.rand(1,self.input_units).tolist()
-                    #     if i == np.ceil(self.seq_len/3)-1 and self.seq_len%3 != 0:
-                    #         outB.extend(r*(self.seq_len%3))
-                    #     else:
-                    #         outB.extend(r*3)
-                    # outB = np.array(outB)
-
-                    # Using 3-dim spline function
-                    N = self.random_seq_len
-                    r = np.random.rand(N, self.input_units)-0.5
-                    # if epoch != 0:
-                    #    r[0,:] = past_outB[-1]
-                    x = np.linspace(-0.5,0.5,num=N)
-                    xnew = np.linspace(-0.5,0.5,num=self.seq_len)
-                    f_cs = []
-                    # outB = []
-                    for i in range(self.input_units):
-                        outB[:,i] = interp1d(x, r[:,i], kind='cubic')(xnew)
-                        # outB.append(interp1d(range(N), r[:,i], kind='cubic')(xnew))
-                    outB = np.array(outB)
-                '''
 
 
 
@@ -649,14 +641,9 @@ class CNN_Simulator:
                 print('r: ', r)
                 print(outA)
 
-
-
-
             network_proctime_en = datetime.datetime.now()
             proctime = (network_proctime_en-network_proctime_st).total_seconds()
             print('proctime:{}s '.format(proctime))
-
-
 
             if not is_drawing:
                 break
@@ -668,10 +655,6 @@ class CNN_Simulator:
 
             # outA_all.extend(outA)
             # outB_all.extend(outB)
-            
-
-
-                
 
             '''
             if self.behavior_mode == self.CHAOTIC_BEHAVIOR:
