@@ -635,7 +635,7 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = self.random_seq_len
+                N = self.seq_len
                 r = np.random.rand(N, self.output_units)-0.5
                 # if epoch != 0:
                 # r[0,:] = past_outA[-1]
