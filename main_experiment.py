@@ -81,6 +81,9 @@ class CNN_Simulator:
         # sequence-length at once
         self.seq_len = 20
 
+        self.system_seq_len = int(self.seq_len*2)
+        self.random_seq_len = int(self.seq_len/5)
+
         self.epoch_size = 100
 
         self.input_units = 4
@@ -100,9 +103,6 @@ class CNN_Simulator:
         # time delayed value
         self.tau = int(self.seq_len/100)
         self.tau = 10
-
-        self.div = 2
-
 
     def weight(self, shape = []):
         initial = tf.truncated_normal(shape, stddev = 0.1, dtype=tf.float32)
@@ -471,7 +471,7 @@ class CNN_Simulator:
         '''
 
         # Using 3-dim spline function
-        N = int(self.seq_len/self.div)
+        N = self.random_seq_len
         r = np.random.rand(N, self.input_units)-0.5
         x = np.linspace(-0.5,0.5,num=N)
         xnew = np.linspace(-0.5,0.5,num=self.seq_len)
@@ -538,7 +538,7 @@ class CNN_Simulator:
                 # outA[0,:] = past_outA[-1]
                 print('outA: ', _outA)
                 x = np.linspace(-0.5,0.5,num=self.seq_len)
-                xnew = np.linspace(-0.5,0.5,num=self.seq_len*2)
+                xnew = np.linspace(-0.5,0.5,num=self.system_seq_len)
                 f_cs = []
                 outA = []
                 for i in range(self.output_units):
@@ -574,7 +574,7 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/self.div)
+                N = self.random_seq_len
                 r = np.random.rand(N, self.output_units)-0.5
                 # if epoch != 0:
                 # r[0,:] = past_outA[-1]
@@ -620,7 +620,7 @@ class CNN_Simulator:
                 outB.append(diff+diff_pos)
 
                 # ADJUST
-                time.sleep(0.04)
+                time.sleep(0.05)
             outB = np.array(outB)
 
             # print('outB[:,0]: ', np.array(outB)[:,0])
@@ -641,7 +641,7 @@ class CNN_Simulator:
                 '''
 
                 # Using 3-dim spline function
-                N = int(self.seq_len/self.div)
+                N = self.random_seq_len
                 r = np.random.rand(N, 2)-0.5
                 # if epoch != 0:
                 #    r[0,:] = past_outB[-1]
