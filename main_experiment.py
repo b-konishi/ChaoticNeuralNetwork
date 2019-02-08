@@ -359,8 +359,8 @@ class CNN_Simulator:
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             '''
             # diff_term = tf.reduce_max(cor[1:]) * tf.abs(te_term)
-            diff_term = (tf.pow(tf.reduce_max(cor[1:]),2))
-            # diff_term = tf.exp(tf.sign(tf.reduce_max(cor[1:]))*tf.pow(tf.reduce_max(cor[1:]),2))
+            diff_term = (tf.pow(tf.reduce_max(cor[1:]),2)*10)
+            # diff_term = tf.exp(tf.sign(tf.reduce_max(cor[1:]))*tf.pow(tf.reduce_max(cor[1:]),1))
             # diff_term = tf.reduce_max(cor[1:])
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
