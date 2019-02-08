@@ -359,7 +359,8 @@ class CNN_Simulator:
             diff_term2 = tf.reduce_min(tf.contrib.distributions.auto_correlation(theta))
             '''
             # diff_term = tf.reduce_max(cor[1:]) * tf.abs(te_term)
-            diff_term = tf.exp(tf.reduce_max(cor[1:]))
+            diff_term = (tf.pow(tf.reduce_max(cor[1:]),2))
+            # diff_term = tf.exp(tf.sign(tf.reduce_max(cor[1:]))*tf.pow(tf.reduce_max(cor[1:]),2))
             # diff_term = tf.reduce_max(cor[1:])
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
@@ -466,9 +467,9 @@ class CNN_Simulator:
         diff, diff_pos, is_drawing = event.get_diff()
 
         # Using 3-dim spline function
-        N = 4
+        N = self.seq_len
         r = np.random.rand(N, 2)-0.5
-        r[0],r[-2] = [0]*2, [0]*2
+        r[0],r[2] = [0]*2, [0]*2
         # r = np.insert(r, 0, outB[-1,0:2], axis=0)
         x = np.linspace(0, N-1, num=N)
         xnew = np.linspace(0, 2, num=self.seq_len)
@@ -513,9 +514,9 @@ class CNN_Simulator:
                 if var == 0:
                     print('INPUT=RANDOM')
                     # outB[:,0:2] = np.random.rand(self.seq_len, 2)-0.5
-                    N = 4
+                    N = self.seq_len
                     r = np.random.rand(N, 2)-0.5
-                    r[0],r[-2] = [0]*2, [0]*2
+                    r[0],r[2] = [0]*2, [0]*2
                     # r = np.insert(r, 0, outB[-1,0:2], axis=0)
                     x = np.linspace(0, N-1, num=N)
                     xnew = np.linspace(0, 2, num=self.seq_len)
@@ -557,7 +558,7 @@ class CNN_Simulator:
                     # Boredom
                     # A: Error-Value is not change
                     # B: Error-Value increases 
-                    bored_len = 20
+                    bored_len = 10
                     if is_changemode and self.behavior_mode == self.CHAOTIC_BEHAVIOR:
                         tmp_error.append(_error)
                         if len(tmp_error) > bored_len:
@@ -568,6 +569,7 @@ class CNN_Simulator:
                             error_slope.append(a)
                             print('slope: ', a)
                             
+                            # Degree of the slope(S): -10deg<S<10deg or S>80deg
                             if abs(a) < np.tan(10/180*np.pi):
                                 print('[Change Mode A]: ', a)
                                 tmp_error = deque([])
@@ -609,9 +611,9 @@ class CNN_Simulator:
             for out in spline_outA:
                 event.set_movement(out, mag)
                 '''
-                while event.get_update() and not event.get_systemstop_signal():
-                    # print('Execute...')
-                    time.sleep(0.001)
+                while event.get_is_output() and not event.get_systemstop_signal():
+                    print('Execute...')
+                    # time.sleep(0.001)
                     pass
                 '''
                 time.sleep(0.01)

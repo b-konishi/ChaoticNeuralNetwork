@@ -14,8 +14,8 @@ import read_joy as joycon
 import pygame
 
 class Event:
-    DEBUG = False
     DEBUG = True
+    DEBUG = False
 
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'
@@ -605,6 +605,9 @@ class Event:
         dx_, dy_ = pos
         self.dx2, self.dy2 = dx_*mag, -dy_*mag
         self.is_output = True
+
+    def get_is_output(self):
+        return self.is_output
 
     def get_starttime(self):
         return self.start_time
