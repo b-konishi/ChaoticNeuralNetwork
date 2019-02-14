@@ -318,7 +318,7 @@ class CNN_Simulator:
 
             # theta = tf.angle(tf.complex(outputs[:,1][1:]-outputs[:,1][:-1], outputs[:,0][1:]-outputs[:,0][:-1]))
             theta = tf.atan((outputs[:,1][1:]-outputs[:,1][:-1])/(outputs[:,0][1:]-outputs[:,0][:-1]+1e-10))
-            # theta = tf.atan((inputs[:,1][1:]-inputs[:,1][:-1])/(inputs[:,0][1:]-inputs[:,0][:-1]+1e-10))
+            theta2 = tf.atan((inputs[:,1][1:]-inputs[:,1][:-1])/(inputs[:,0][1:]-inputs[:,0][:-1]+1e-10))
             '''
             # theta = (theta-tf.reduce_min(theta)) / (tf.reduce_max(theta)-tf.reduce_min(theta))
             cor = []
@@ -343,6 +343,8 @@ class CNN_Simulator:
             '''
             cor = tf.contrib.distributions.auto_correlation(theta)
             cor = tf.where(tf.is_nan(cor), tf.constant(0.0,shape=cor.get_shape()), cor)
+            cor2 = tf.contrib.distributions.auto_correlation(theta2)
+            cor2 = tf.where(tf.is_nan(cor2), tf.constant(0.0,shape=cor.get_shape()), cor2)
             
             '''
             _, var = tf.nn.moments(cor[1:]-cor[:-1], [0])
@@ -360,14 +362,15 @@ class CNN_Simulator:
             '''
             # diff_term = tf.reduce_max(cor[1:]) * tf.abs(te_term)
             diff_term = (tf.pow(tf.reduce_max(cor[1:]),2)*10)
+            diff_term2 = (tf.pow(tf.reduce_max(cor2[1:]),2)*10)
             # diff_term = tf.exp(tf.sign(tf.reduce_max(cor[1:]))*tf.pow(tf.reduce_max(cor[1:]),1))
             # diff_term = tf.reduce_max(cor[1:])
             # tf.summary.scalar('CCF: ', tf.reduce_max(ccf))
             tf.summary.scalar('error_CCF', diff_term)
-            tf.summary.scalar('error_CCF2', tf.reduce_mean(theta)*180/np.pi)
+            tf.summary.scalar('error_CCF2', diff_term2)
 
             # return -te_term, te_term, diff_term
-            return -(te_term-diff_term), te_term, diff_term, theta
+            return -(te_term-diff_term-diff_term2), te_term, diff_term, theta
 
         '''
         with tf.name_scope('loss_lyapunov'):
