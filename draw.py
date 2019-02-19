@@ -14,8 +14,8 @@ import read_joy as joycon
 import pygame
 
 class Event:
-    DEBUG = True
     DEBUG = False
+    DEBUG = True
 
     USER_MODE = 'USER'
     RANDOM_MODE = 'RANDOM'

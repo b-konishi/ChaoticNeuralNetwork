@@ -602,7 +602,7 @@ class CNN_Simulator:
                 # r[0,:] = past_outA[-1]
                 print('r: ', r)
                 x = np.linspace(0, N-1, num=N)
-                xnew = np.linspace(0, 1, num=10)
+                xnew = np.linspace(0, 1, num=40)
                 spline_outA = []
                 for i in range(self.output_units):
                     spline_outA.append(interp1d(x, r[:,i], kind='cubic')(xnew))
@@ -613,12 +613,10 @@ class CNN_Simulator:
             mag = 5
             for out in spline_outA:
                 event.set_movement(out, mag)
-                '''
-                while event.get_is_output() and not event.get_systemstop_signal():
-                    print('Execute...')
-                    # time.sleep(0.001)
-                    pass
-                '''
+                # while event.get_is_output() and not event.get_systemstop_signal():
+                #     print('Execute...')
+                #     # time.sleep(0.001)
+                #     pass
                 time.sleep(0.01)
 
             diff, diff_pos, is_drawing = event.get_diff()
@@ -719,8 +717,8 @@ class CNN_Simulator:
 
 
 if __name__ == "__main__":
-    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.CHAOTIC_BEHAVIOR)
-    # simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.RANDOM_BEHAVIOR)
+    # simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.CHAOTIC_BEHAVIOR)
+    simulator = CNN_Simulator(network_mode=CNN_Simulator.TRAIN_MODE, behavior_mode=CNN_Simulator.RANDOM_BEHAVIOR)
     # simulator.learning1()
     # simulator.robot_robot_interaction()
     simulator.human_agent_interaction()
