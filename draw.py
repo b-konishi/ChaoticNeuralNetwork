@@ -33,7 +33,7 @@ class Event:
     TESTING_TIME = 15
 
     DIFF = 0.05
-    h_speed = 0.04
+    h_speed = 0.05
 
     USER_COLOR = '#ff4500'
     COM_COLOR = '#32cd32'
